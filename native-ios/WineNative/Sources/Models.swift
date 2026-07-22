@@ -280,14 +280,16 @@ struct GiftIdea: Identifiable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         wineName = try c.decode(String.self, forKey: .wineName)
         producer = try c.decodeIfPresent(String.self, forKey: .producer)
-        style = (try c.decodeIfPresent(String.self, forKey: .style))
-            ?? (try c.decodeIfPresent(String.self, forKey: .wineColor))
+        let styleVal = try c.decodeIfPresent(String.self, forKey: .style)
+        let colorVal = try c.decodeIfPresent(String.self, forKey: .wineColor)
+        style = styleVal ?? colorVal
         rating = try c.decodeIfPresent(Double.self, forKey: .rating)
         comment = try c.decodeIfPresent(String.self, forKey: .comment)
         photoPath = try c.decodeIfPresent(String.self, forKey: .photoPath)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
-        likedBy = (try c.decodeIfPresent(String.self, forKey: .likedBy))
-            ?? (try c.decodeIfPresent(String.self, forKey: .username))
+        let likedVal = try c.decodeIfPresent(String.self, forKey: .likedBy)
+        let userVal = try c.decodeIfPresent(String.self, forKey: .username)
+        likedBy = likedVal ?? userVal
         forUser = try c.decodeIfPresent(String.self, forKey: .forUser)
         id = "\(wineName)-\(likedBy ?? "")-\(createdAt ?? "")"
     }
