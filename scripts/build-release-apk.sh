@@ -104,8 +104,11 @@ if [[ "$PUBLISH" -eq 1 ]]; then
   DEST="${WINE_MOBILE_WEB_DIR:-/var/www/wine-bis-mobile}"
   echo "[build-release-apk] publish → $DEST/"
   sudo install -d -m 755 -o www-data -g www-data "$DEST"
+  # Noms canoniques WeenoBis (pas WeenoOff)
   sudo install -m 644 -o www-data -g www-data "$OUT" "$DEST/WeenoBis.apk"
-  sudo install -m 644 -o www-data -g www-data "$OUT" "$DEST/weenooff.apk"
+  sudo install -m 644 -o www-data -g www-data "$OUT" "$DEST/weenobis.apk"
+  # Nettoie l’ancien alias confus (copie Weeno)
+  sudo rm -f "$DEST/weenooff.apk" "$DEST/WeenoOff.apk" 2>/dev/null || true
   sha256sum "$OUT" | awk '{print $1}' | sudo tee "$DEST/.apk-sha256" >/dev/null
   sudo chown www-data:www-data "$DEST/.apk-sha256" 2>/dev/null || true
   if [[ -f "$ROOT/web-portal/index.html" ]]; then
@@ -114,5 +117,5 @@ if [[ "$PUBLISH" -eq 1 ]]; then
   if [[ -x "$ROOT/scripts/write-mobile-versions.sh" ]]; then
     "$ROOT/scripts/write-mobile-versions.sh"
   fi
-  echo "[build-release-apk] publié: https://eiter.freeboxos.fr/mobile/wine/WeenoBis.apk"
+  echo "[build-release-apk] publié: https://eiter.freeboxos.fr/mobile/wine-bis/WeenoBis.apk"
 fi

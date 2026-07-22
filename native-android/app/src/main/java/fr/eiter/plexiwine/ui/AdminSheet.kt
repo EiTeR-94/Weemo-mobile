@@ -427,28 +427,55 @@ fun AdminSheet(vm: AppViewModel) {
                     // Bearer Vivino — scan direct téléphone
                     val ctx = LocalContext.current
                     var vivinoConfigured by remember { mutableStateOf(VivinoTokenStore.isConfigured(ctx)) }
+                    var bearerHint by remember {
+                        mutableStateOf(
+                            VivinoTokenStore.bearer(ctx)?.let { t ->
+                                if (t.length <= 6) "••••" else "…" + t.takeLast(4)
+                            }.orEmpty()
+                        )
+                    }
                     var bearerDraft by remember { mutableStateOf("") }
                     var userIdDraft by remember { mutableStateOf(VivinoTokenStore.userId(ctx).orEmpty()) }
+                    // Re-lit le store à chaque ouverture de l’onglet Outils (évite faux « manquant »)
+                    LaunchedEffect(tab) {
+                        if (tab == 2) {
+                            vivinoConfigured = VivinoTokenStore.isConfigured(ctx)
+                            userIdDraft = VivinoTokenStore.userId(ctx).orEmpty()
+                            bearerHint = VivinoTokenStore.bearer(ctx)?.let { t ->
+                                if (t.length <= 6) "••••" else "…" + t.takeLast(4)
+                            }.orEmpty()
+                        }
+                    }
                     Text("Scan Vivino (depuis le téléphone)", color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        if (vivinoConfigured) "● Bearer chiffré (EncryptedPrefs) — scan direct api.vivino.com"
-                        else "● Bearer manquant — colle le token session app Vivino",
+                        if (vivinoConfigured)
+                            "● Bearer OK ($bearerHint) — chiffré · scan → api.vivino.com"
+                        else
+                            "● Bearer manquant — scan via serveur (Gemini) si dispo",
                         color = if (vivinoConfigured) WineColors.ok else WineColors.error,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Stocké chiffré sur l’appareil (jamais en clair). Le journal reste sur WeenoBis.",
+                        "Stocké chiffré sur l’appareil. Champ vide + Enregistrer = ne touche pas au token (Effacer pour supprimer).",
                         color = WineColors.muted,
                         fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Récupérer token + id : mitm (Wi‑Fi) → ouvre l’app Vivino → " +
+                            "requête api.vivino.com → header Authorization: Bearer … et param user_id=…",
+                        color = WineColors.muted,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
                     )
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = bearerDraft,
                         onValueChange = { bearerDraft = it },
                         label = { Text("Bearer Vivino") },
-                        placeholder = { Text("colle le token…") },
+                        placeholder = { Text(if (vivinoConfigured) "laisser vide pour garder" else "colle le token…") },
                         singleLine = true,
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
@@ -467,17 +494,29 @@ fun AdminSheet(vm: AppViewModel) {
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         WeenoPrimaryButton("Enregistrer") {
-                            VivinoTokenStore.setBearer(ctx, bearerDraft)
+                            // Ne pas effacer le token si le champ est vide (piège admin)
+                            val hadNewToken = bearerDraft.isNotBlank()
+                            if (hadNewToken) {
+                                VivinoTokenStore.setBearer(ctx, bearerDraft)
+                            }
                             VivinoTokenStore.setUserId(ctx, userIdDraft)
                             vivinoConfigured = VivinoTokenStore.isConfigured(ctx)
+                            bearerHint = VivinoTokenStore.bearer(ctx)?.let { t ->
+                                if (t.length <= 6) "••••" else "…" + t.takeLast(4)
+                            }.orEmpty()
                             bearerDraft = ""
-                            message = if (vivinoConfigured) "Bearer Vivino enregistré" else "Bearer effacé"
+                            message = when {
+                                vivinoConfigured && hadNewToken -> "Bearer Vivino enregistré ($bearerHint)"
+                                vivinoConfigured -> "Bearer toujours OK ($bearerHint)"
+                                else -> "Pas de Bearer — le scan passera par le serveur"
+                            }
                             toastOk(message ?: "OK")
                         }
                         WeenoSecondaryButton("Effacer") {
                             VivinoTokenStore.setBearer(ctx, null)
                             VivinoTokenStore.setUserId(ctx, null)
                             vivinoConfigured = false
+                            bearerHint = ""
                             bearerDraft = ""
                             userIdDraft = ""
                             message = "Bearer supprimé"

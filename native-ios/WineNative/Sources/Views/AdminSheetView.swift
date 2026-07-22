@@ -272,14 +272,21 @@ struct AdminSheetView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.text)
             Text(vivinoTokenConfigured
-                 ? "● Bearer chiffré (Keychain ThisDeviceOnly) — scan direct api.vivino.com"
-                 : "● Bearer manquant — colle le token session app Vivino")
+                 ? "● Bearer OK (\(bearerMask)) — Keychain · scan → api.vivino.com"
+                 : "● Bearer manquant — scan via serveur (Gemini) si dispo")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(vivinoTokenConfigured ? Theme.ok : Theme.error)
-            Text("Stocké dans le Keychain (pas de backup iCloud). Le journal reste sur WeenoBis.")
+            Text("Stocké Keychain (pas de backup iCloud). Champ vide + Enregistrer = garde le token actuel.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.muted)
-            WeenoField(label: "Bearer Vivino (sans le mot Bearer)", text: $vivinoBearerDraft, placeholder: "colle le token…")
+            Text("Récupérer token + id : mitm (Wi‑Fi) → app Vivino → api.vivino.com → header Authorization: Bearer … et param user_id=…")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.muted)
+            WeenoField(
+                label: "Bearer Vivino (sans le mot Bearer)",
+                text: $vivinoBearerDraft,
+                placeholder: vivinoTokenConfigured ? "laisser vide pour garder" : "colle le token…"
+            )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textContentType(.password)
@@ -288,12 +295,17 @@ struct AdminSheetView: View {
                 .keyboardType(.numberPad)
             HStack(spacing: 8) {
                 WeenoPrimaryButton(title: "Enregistrer") {
-                    // Strip "Bearer " fait aussi dans VivinoTokenStore
-                    VivinoTokenStore.bearer = vivinoBearerDraft
+                    // Ne pas effacer si le champ est vide (piège classique)
+                    let draft = vivinoBearerDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !draft.isEmpty {
+                        VivinoTokenStore.bearer = draft
+                    }
                     VivinoTokenStore.userId = vivinoUserIdDraft.trimmingCharacters(in: .whitespacesAndNewlines).ifEmptyNil
                     vivinoTokenConfigured = VivinoTokenStore.isConfigured
                     vivinoBearerDraft = ""
-                    message = vivinoTokenConfigured ? "Bearer Vivino enregistré (Keychain)" : "Bearer effacé"
+                    message = vivinoTokenConfigured
+                        ? "Bearer Vivino OK (\(bearerMask))"
+                        : "Pas de Bearer — scan via serveur si dispo"
                 }
                 WeenoSecondaryButton(title: "Effacer") {
                     VivinoTokenStore.bearer = nil
@@ -314,6 +326,13 @@ struct AdminSheetView: View {
             vivinoTokenConfigured = VivinoTokenStore.isConfigured
             vivinoUserIdDraft = VivinoTokenStore.userId ?? ""
         }
+    }
+
+    /// Masque pour statut admin (jamais le token complet).
+    private var bearerMask: String {
+        guard let t = VivinoTokenStore.bearer, !t.isEmpty else { return "—" }
+        if t.count <= 6 { return "••••" }
+        return "…" + String(t.suffix(4))
     }
 
     @ViewBuilder

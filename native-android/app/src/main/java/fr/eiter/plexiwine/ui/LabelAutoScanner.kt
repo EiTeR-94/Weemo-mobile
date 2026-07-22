@@ -1,14 +1,8 @@
 package fr.eiter.plexiwine.ui
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.Rect
-import android.graphics.YuvImage
 import android.util.Size
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,18 +11,19 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,15 +49,18 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import fr.eiter.plexiwine.ImageUtils
 import fr.eiter.plexiwine.ui.theme.WineColors
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Caméra live façon Vivino : texte d'étiquette stable → capture auto JPEG.
+ * Caméra live : texte stable dans le cadre → capture auto JPEG **croppée au cadre**.
+ *
+ * Stabilité = frames "bon texte" consécutives (pas d’égalité stricte OCR, trop bruyante).
  */
 @Composable
 fun LabelAutoScanner(
@@ -70,6 +69,7 @@ fun LabelAutoScanner(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val density = LocalDensity.current
     var hasCam by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -90,12 +90,15 @@ fun LabelAutoScanner(
     val fired = remember { AtomicBoolean(false) }
     val analyzing = remember { AtomicBoolean(false) }
     val frameN = remember { AtomicInteger(0) }
-    var lastSig by remember { mutableStateOf("") }
-    // Plus strict : évite faux déclenchements (menu, mur, texte flou)
-    val minStable = 7
-    val analyzeEvery = 5
-    val minChars = 18
-    val minLines = 3
+    // Guide rect en pixels preview (mis à jour par le layout Compose)
+    val guideRectPx = remember { AtomicReference(floatArrayOf(0f, 0f, 1f, 1f)) } // L,T,R,B
+    val previewSizePx = remember { AtomicReference(intArrayOf(0, 0)) } // W,H
+
+    // Moins strict qu’avant : l’OCR change de sig à chaque frame → exact match = bloqué à 1/7
+    val minStable = 4
+    val analyzeEvery = 3
+    val minChars = 10
+    val minLines = 2
 
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -105,6 +108,30 @@ fun LabelAutoScanner(
     val executor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
+    fun cropToGuide(raw: ByteArray): ByteArray {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+        val iw = bounds.outWidth
+        val ih = bounds.outHeight
+        val (vw, vh) = previewSizePx.get()
+        val g = guideRectPx.get()
+        if (iw <= 0 || ih <= 0 || vw <= 0 || vh <= 0) return raw
+        // Légère marge intérieure (évite le bord du cadre UI)
+        val padX = (g[2] - g[0]) * 0.04f
+        val padY = (g[3] - g[1]) * 0.04f
+        val norm = ImageUtils.fillCenterViewRectToImageNorm(
+            viewW = vw,
+            viewH = vh,
+            imageW = iw,
+            imageH = ih,
+            rectL = g[0] + padX,
+            rectT = g[1] + padY,
+            rectR = g[2] - padX,
+            rectB = g[3] - padY
+        )
+        return ImageUtils.cropNormalized(raw, norm[0], norm[1], norm[2], norm[3], quality = 90)
     }
 
     fun takeStill() {
@@ -119,7 +146,9 @@ fun LabelAutoScanner(
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     try {
-                        onCapture(file.readBytes())
+                        val raw = file.readBytes()
+                        val cropped = cropToGuide(raw)
+                        onCapture(cropped)
                     } catch (e: Exception) {
                         fired.set(false)
                         status = "Erreur lecture photo"
@@ -141,7 +170,19 @@ fun LabelAutoScanner(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val viewW = constraints.maxWidth.toFloat()
+        val viewH = constraints.maxHeight.toFloat()
+        // Cadre guide : 78% largeur, ratio ~étiquette bouteille, centré un peu haut
+        val guideW = viewW * 0.78f
+        val guideH = guideW / 0.72f
+        val guideL = (viewW - guideW) / 2f
+        val guideT = (viewH - guideH) / 2f - with(density) { 20.dp.toPx() }
+        val guideR = guideL + guideW
+        val guideB = guideT + guideH
+        guideRectPx.set(floatArrayOf(guideL, guideT, guideR, guideB))
+        previewSizePx.set(intArrayOf(viewW.toInt(), viewH.toInt()))
+
         if (!hasCam) {
             Column(
                 Modifier.align(Alignment.Center).padding(24.dp),
@@ -150,7 +191,7 @@ fun LabelAutoScanner(
                 Text("Autorise la caméra", color = Color.White, fontWeight = FontWeight.SemiBold)
                 TextButton(onClick = onCancel) { Text("Fermer", color = WineColors.accent) }
             }
-            return@Box
+            return@BoxWithConstraints
         }
 
         AndroidView(
@@ -201,29 +242,28 @@ fun LabelAutoScanner(
                                     }.filter { it.isNotEmpty() }
                                     val text = lines.joinToString("\n")
                                     val chars = text.count { !it.isWhitespace() }
-                                    val sig = lines.take(6).joinToString("|").lowercase()
+                                    // "Bon" = assez de texte (étiquette) — pas d’égalité stricte de sig
                                     val good = chars >= minChars && lines.size >= minLines
-                                    // Main thread UI
                                     previewView.post {
                                         if (fired.get()) return@post
                                         if (good) {
-                                            if (sig == lastSig && sig.isNotEmpty()) {
-                                                stable += 1
-                                            } else {
-                                                lastSig = sig
-                                                stable = 1
-                                            }
-                                            if (stable >= minStable) {
+                                            val next = (stable + 1).coerceAtMost(minStable)
+                                            stable = next
+                                            if (next >= minStable) {
                                                 takeStill()
                                             } else {
-                                                status = "Étiquette vue — tiens stable… ($stable/$minStable)"
-                                                borderOk = false
+                                                status = "Étiquette vue — tiens stable… ($next/$minStable)"
+                                                borderOk = next >= 2
                                             }
                                         } else {
-                                            stable = 0
-                                            lastSig = ""
-                                            status = "Cadre l’étiquette dans le cadre"
-                                            borderOk = false
+                                            // Soft reset : une frame floue ne remet pas à 0
+                                            if (stable > 0) stable = (stable - 1).coerceAtLeast(0)
+                                            if (stable == 0) {
+                                                status = "Cadre l’étiquette dans le cadre"
+                                                borderOk = false
+                                            } else {
+                                                status = "Étiquette vue — tiens stable… ($stable/$minStable)"
+                                            }
                                         }
                                     }
                                 }
@@ -254,13 +294,15 @@ fun LabelAutoScanner(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Guide frame
+        // Guide frame — même géométrie exacte que guideRectPx (crop)
         Box(
             Modifier
-                .align(Alignment.Center)
-                .padding(bottom = 48.dp)
-                .fillMaxWidth(0.78f)
-                .aspectRatio(0.72f)
+                .offset(
+                    x = with(density) { guideL.toDp() },
+                    y = with(density) { guideT.toDp() }
+                )
+                .width(with(density) { guideW.toDp() })
+                .height(with(density) { guideH.toDp() })
                 .border(
                     2.5.dp,
                     if (borderOk) Color(0xFF2ECC71) else Color.White.copy(alpha = 0.85f),

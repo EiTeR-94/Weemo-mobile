@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f1419" />
-  <title>Weeno — téléchargement</title>
+  <meta name="theme-color" content="#0c1218" />
+  <title>WeenoBis — téléchargement</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --card: #1a222c;
+      --bg: #0c1218;
+      --card: #152029;
       --text: #f1f5f9;
       --muted: #94a3b8;
-      --accent: #c45c7a;
-      --border: #2d3a4a;
+      --accent: #e8a54b;
+      --border: #2a3a4a;
       --ios: #60a5fa;
       --android: #34d399;
       --ok: #4ade80;
+      --bis: #c45c7a;
     }
     * { box-sizing: border-box; }
     body {
@@ -23,7 +24,8 @@
       min-height: 100vh;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(196, 92, 122, 0.14), transparent),
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(232, 165, 75, 0.16), transparent),
+        radial-gradient(ellipse 50% 40% at 90% 20%, rgba(196, 92, 122, 0.1), transparent),
         var(--bg);
       color: var(--text);
       display: flex;
@@ -37,27 +39,51 @@
     .brand .ico { font-size: 2.5rem; line-height: 1; margin-bottom: 0.35rem; }
     .brand h1 {
       margin: 0;
-      font-size: 1.45rem;
+      font-size: 1.5rem;
       font-weight: 800;
       letter-spacing: -0.02em;
     }
+    .brand h1 .tag {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.12rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      vertical-align: middle;
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    }
     .brand p {
-      margin: 0.35rem 0 0;
+      margin: 0.4rem 0 0;
       color: var(--muted);
       font-size: 0.88rem;
       line-height: 1.4;
     }
     .notice {
-      background: color-mix(in srgb, var(--accent) 10%, var(--card));
-      border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+      background: color-mix(in srgb, var(--accent) 12%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+      border-radius: 12px;
+      padding: 0.75rem 0.9rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notice strong { color: var(--text); }
+    .diff {
+      background: var(--card);
+      border: 1px solid var(--border);
       border-radius: 12px;
       padding: 0.7rem 0.85rem;
       margin-bottom: 0.9rem;
       font-size: 0.78rem;
       color: var(--muted);
-      line-height: 1.4;
+      line-height: 1.45;
     }
-    .notice strong { color: var(--text); }
+    .diff strong { color: var(--text); }
+    .diff a { color: var(--accent); font-weight: 600; text-decoration: none; }
     .versions {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -174,7 +200,6 @@
       color: var(--muted);
       line-height: 1.35;
     }
-    /* Mini-tuto (même page) */
     .tuto {
       display: none;
       margin-top: 0.75rem;
@@ -239,6 +264,7 @@
       margin-top: 1rem;
       font-size: 0.72rem;
       color: var(--muted);
+      line-height: 1.5;
     }
     .foot a { color: var(--accent); }
   </style>
@@ -247,13 +273,21 @@
   <main class="shell">
     <div class="brand">
       <div class="ico" aria-hidden="true">🍷</div>
-      <h1>Weeno</h1>
-      <p>Télécharge l’app native, puis suis le mini-guide d’installation.</p>
+      <h1>WeenoBis <span class="tag">fork</span></h1>
+      <p>App native séparée de Weeno — scan étiquette Vivino depuis le téléphone.</p>
     </div>
 
     <div class="notice" id="notice">
-      <strong>IPA et APK se mettent à jour séparément.</strong>
-      Regarde la version de <em>ta</em> plateforme ci-dessous avant d’installer.
+      <strong>Ce n’est pas le portail Weeno.</strong>
+      Ici tu télécharges <strong>WeenoBis</strong> (package <code>plexiwinebis</code>),
+      pas WeenoOff. IPA et APK se mettent à jour séparément.
+    </div>
+
+    <div class="diff">
+      <strong>Weeno</strong> = journal + scan Gemini serveur →
+      <a href="/mobile/wine/">/mobile/wine/</a><br>
+      <strong>WeenoBis</strong> = journal wine-bis + scan Vivino sur le téléphone →
+      <strong>cette page</strong>.
     </div>
 
     <div class="versions" id="versions" aria-live="polite">
@@ -281,10 +315,10 @@
       <h2>🍎 iPhone · iPad</h2>
       <p class="verline" id="line-ios">Version : …</p>
       <p class="meta">
-        Fichier <strong>WeenoOff.ipa</strong> — pas d’App Store.
+        Fichier <strong>WeenoBis.ipa</strong> — pas d’App Store.
         Installation via <strong>Sideloadly</strong> (PC ou Mac).
       </p>
-      <a class="btn btn-ios" href="/mobile/wine/weenooff.ipa" download="WeenoOff.ipa">Télécharger l’IPA</a>
+      <a class="btn btn-ios" href="/mobile/wine-bis/weenobis.ipa" download="WeenoBis.ipa">Télécharger l’IPA WeenoBis</a>
       <button
         type="button"
         class="btn btn-ghost"
@@ -295,7 +329,7 @@
         Comment installer ? <span class="chev" aria-hidden="true">▾</span>
       </button>
       <div class="tuto ios" id="tuto-ios" hidden>
-        <p class="tuto-title">Mini-guide iOS</p>
+        <p class="tuto-title">Mini-guide iOS · WeenoBis</p>
         <ol>
           <li>
             Sur un <strong>PC Windows ou un Mac</strong>, télécharge et installe
@@ -308,7 +342,8 @@
             </span>
           </li>
           <li>
-            Télécharge l’IPA ci-dessus — fichier <strong>WeenoOff.ipa</strong>.
+            Télécharge l’IPA ci-dessus — fichier <strong>WeenoBis.ipa</strong>
+            (pas WeenoOff).
           </li>
           <li>
             Branche l’iPhone en USB, ouvre Sideloadly, glisse l’IPA,
@@ -320,8 +355,8 @@
             → fais confiance au développeur.
           </li>
           <li>
-            Ouvre Weeno. Compte maison : Wi‑Fi / VPN.
-            Invité : colle le lien d’invitation dans l’app.
+            Ouvre <strong>WeenoBis</strong>. Compte maison : Wi‑Fi / VPN.
+            Invité : colle le lien d’invitation wine-bis.
           </li>
         </ol>
         <p class="note">
@@ -330,17 +365,17 @@
           Apple ID gratuit (signature temporaire).
         </p>
       </div>
-      <p class="hint">Après install : Wi‑Fi maison / VPN, ou lien d’invitation en 4G/5G.</p>
+      <p class="hint">Après install : Wi‑Fi maison / VPN, ou lien d’invitation wine-bis en 4G/5G.</p>
     </section>
 
     <section class="card" id="card-and">
       <h2>🤖 Android</h2>
       <p class="verline" id="line-and">Version : …</p>
       <p class="meta">
-        Fichier <strong>WeenoOff.apk</strong> — autorise les « sources inconnues »
-        si Android le demande.
+        Fichier <strong>WeenoBis.apk</strong> — autorise les « sources inconnues »
+        si Android le demande. Package distinct de Weeno (coexistent).
       </p>
-      <a class="btn btn-android" href="/mobile/wine/weenooff.apk" download="WeenoOff.apk">Télécharger l’APK</a>
+      <a class="btn btn-android" href="/mobile/wine-bis/weenobis.apk" download="WeenoBis.apk">Télécharger l’APK WeenoBis</a>
       <button
         type="button"
         class="btn btn-ghost"
@@ -351,33 +386,36 @@
         Comment installer ? <span class="chev" aria-hidden="true">▾</span>
       </button>
       <div class="tuto and" id="tuto-and" hidden>
-        <p class="tuto-title">Mini-guide Android</p>
+        <p class="tuto-title">Mini-guide Android · WeenoBis</p>
         <ol>
           <li>
-            Télécharge l’APK ci-dessus — fichier <strong>WeenoOff.apk</strong>.
+            Télécharge l’APK ci-dessus — fichier <strong>WeenoBis.apk</strong>
+            (pas WeenoOff).
           </li>
           <li>
             Ouvre le fichier téléchargé. Si demandé, autorise
             <strong>Installer des apps inconnues</strong> pour ton navigateur / Fichiers.
           </li>
           <li>
-            Valide l’installation (ou la <strong>mise à jour</strong> si tu as déjà l’app).
-            <strong>Pas besoin de désinstaller</strong> l’ancienne version — les données
-            et le compte sont conservés.
+            Valide l’installation (ou la <strong>mise à jour</strong> si tu as déjà WeenoBis).
+            <strong>Pas besoin de désinstaller</strong> l’ancienne version WeenoBis.
           </li>
           <li>
-            Ouvre l’app. Compte maison : Wi‑Fi / VPN. Invité : lien d’invitation.
+            Ouvre <strong>WeenoBis</strong>. Compte maison : Wi‑Fi / VPN. Invité : lien d’invitation wine-bis.
           </li>
         </ol>
         <p class="note">
           Les mises à jour se font en téléchargeant la nouvelle APK par-dessus l’ancienne
-          (même signature). Pas de Play Store.
+          (même signature). Pas de Play Store. Weeno et WeenoBis peuvent coexister.
         </p>
       </div>
       <p class="hint">Cycle de maj indépendant de l’iPhone — compare avec la version dans l’app.</p>
     </section>
 
-    <p class="foot">Plexi · <a href="/wine/">webapp Weeno</a></p>
+    <p class="foot">
+      Plexi · <a href="/wine-bis/">webapp WeenoBis</a>
+      · <a href="/mobile/wine/">portail Weeno (classique)</a>
+    </p>
   </main>
   <script>
     function setText(id, t) {
@@ -409,7 +447,8 @@
     bindTuto("btn-tuto-ios", "tuto-ios");
     bindTuto("btn-tuto-and", "tuto-and");
 
-    fetch("/mobile/wine/versions.json?_=" + Date.now(), { cache: "no-store" })
+    // versions WeenoBis (pas /mobile/wine/)
+    fetch("/mobile/wine-bis/versions.json?_=" + Date.now(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) {
         if (!v) return;

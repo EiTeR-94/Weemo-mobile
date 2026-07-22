@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import Vision
 
-/// Caméra live façon Vivino : détecte texte d'étiquette stable → capture auto.
+/// Caméra live : détecte texte stable → capture auto **croppée au cadre guide**.
 struct LabelAutoScannerView: UIViewControllerRepresentable {
     var onCapture: (UIImage) -> Void
     var onCancel: () -> Void
@@ -34,15 +34,15 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private let shutterBtn = UIButton(type: .system)
 
     private var frameCounter = 0
-    private var lastTextSignature = ""
     private var stableCount = 0
     private var capturing = false
     private var fired = false
-    /// Plus strict : évite les faux déclenchements (menu, mur, texte flou)
-    private let minStableFrames = 7          // ~1.0–1.4 s selon throttle
-    private let analyzeEveryN = 5
-    private let minChars = 18
-    private let minLines = 3
+    /// Frames "bon texte" consécutives (pas d’égalité stricte OCR → bloquait à 1/7)
+    private let minStableFrames = 4
+    private let analyzeEveryN = 3
+    private let minChars = 10
+    private let minLines = 2
+    private var analyzing = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -116,7 +116,7 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
 
     private func layoutGuide() {
         let w = view.bounds.width * 0.78
-        let h = w * 1.15
+        let h = w / 0.72
         guideView.frame = CGRect(
             x: (view.bounds.width - w) / 2,
             y: (view.bounds.height - h) / 2 - 20,
@@ -194,28 +194,24 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        if fired || capturing { return }
+        if fired || capturing || analyzing { return }
         frameCounter += 1
         guard frameCounter % analyzeEveryN == 0 else { return }
         guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
+        analyzing = true
         let req = VNRecognizeTextRequest { [weak self] request, _ in
+            defer { self?.analyzing = false }
             guard let self, !self.fired, !self.capturing else { return }
             let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
             let lines: [String] = observations.compactMap { $0.topCandidates(1).first?.string }
             let text = lines.joined(separator: "\n")
-            let sig = lines.prefix(6).joined(separator: "|").lowercased()
             let charCount = text.filter { !$0.isWhitespace }.count
             let good = charCount >= self.minChars && lines.count >= self.minLines
 
             DispatchQueue.main.async {
                 if good {
-                    if sig == self.lastTextSignature, !sig.isEmpty {
-                        self.stableCount += 1
-                    } else {
-                        self.lastTextSignature = sig
-                        self.stableCount = 1
-                    }
+                    self.stableCount = min(self.stableCount + 1, self.minStableFrames)
                     if self.stableCount >= self.minStableFrames {
                         self.setStatus("Étiquette détectée — capture…")
                         self.guideView.layer.borderColor = UIColor.systemGreen.cgColor
@@ -225,17 +221,21 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
                         self.guideView.layer.borderColor = UIColor.systemYellow.cgColor
                     }
                 } else {
-                    self.stableCount = 0
-                    self.lastTextSignature = ""
-                    self.setStatus("Cadre l’étiquette dans le cadre")
-                    self.guideView.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+                    // Soft reset : une frame floue ne remet pas à zéro
+                    if self.stableCount > 0 { self.stableCount -= 1 }
+                    if self.stableCount == 0 {
+                        self.setStatus("Cadre l’étiquette dans le cadre")
+                        self.guideView.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+                    } else {
+                        self.setStatus("Étiquette vue — tiens stable… (\(self.stableCount)/\(self.minStableFrames))")
+                    }
                 }
             }
         }
         req.recognitionLevel = .fast
         req.usesLanguageCorrection = false
-        // Crop approx centre (cadre guide)
-        req.regionOfInterest = CGRect(x: 0.12, y: 0.18, width: 0.76, height: 0.64)
+        // ROI centre ≈ cadre guide (Vision: origin bas-gauche normalisé)
+        req.regionOfInterest = CGRect(x: 0.11, y: 0.18, width: 0.78, height: 0.64)
 
         let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: .up, options: [:])
         try? handler.perform([req])
@@ -272,6 +272,42 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private func setStatus(_ s: String) {
         statusLabel.text = "  \(s)  "
     }
+
+    /// Crop l’image full-res au cadre guide (preview aspectFill).
+    private func cropToGuide(_ image: UIImage) -> UIImage {
+        guard let preview else { return image }
+        // Guide en coords layer preview
+        let guideInPreview = preview.convert(guideView.frame, from: view.layer)
+        // → rect normalisé dans l’espace buffer caméra
+        let meta = preview.metadataOutputRectConverted(fromLayerRect: guideInPreview)
+        // Légère marge intérieure
+        let inset: CGFloat = 0.03
+        var r = meta.insetBy(dx: meta.width * inset, dy: meta.height * inset)
+        r = r.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard r.width > 0.05, r.height > 0.05 else { return image }
+
+        // Dessine l’image orientée puis crop
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = true
+        let oriented = UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+        guard let cg = oriented.cgImage else { return image }
+        let w = CGFloat(cg.width)
+        let h = CGFloat(cg.height)
+        // metadataOutputRect : origin bas-gauche Vision/AVFoundation → flip Y pour UIImage top-left
+        let crop = CGRect(
+            x: r.origin.x * w,
+            y: (1 - r.origin.y - r.height) * h,
+            width: r.width * w,
+            height: r.height * h
+        ).integral
+        guard crop.width > 32, crop.height > 32,
+              let cut = cg.cropping(to: crop)
+        else { return image }
+        return UIImage(cgImage: cut, scale: oriented.scale, orientation: .up)
+    }
 }
 
 extension LabelAutoScannerVC: AVCapturePhotoCaptureDelegate {
@@ -300,7 +336,9 @@ extension LabelAutoScannerVC: AVCapturePhotoCaptureDelegate {
             return
         }
         DispatchQueue.main.async { [weak self] in
-            self?.onCapture?(image)
+            guard let self else { return }
+            let cropped = self.cropToGuide(image)
+            self.onCapture?(cropped)
         }
     }
 }
