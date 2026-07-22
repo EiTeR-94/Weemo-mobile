@@ -1,0 +1,5 @@
+Weeno mobile
+============
+Portail : https://eiter.freeboxos.fr/mobile/wine/
+APK     : ./scripts/build-release-apk.sh --publish
+IPA     : GitHub Actions (workflow ios-ipa.yml) puis wine-mobile-sync-github.sh

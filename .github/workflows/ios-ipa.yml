@@ -1,0 +1,82 @@
+# IPA native SwiftUI Weeno — build auto + Release GitHub
+#
+# Après release, le serveur Plexi tire l’IPA :
+#   timer wine-mobile-sync (à activer) ou manuel
+#   → /home/eiter/scripts/wine-mobile-sync-github.sh
+#   → /var/www/wine-mobile/WeenoOff.ipa + versions.json
+# Portail : https://eiter.freeboxos.fr/mobile/wine/
+
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "native-ios/**"
+      - "scripts/build-native-ipa.sh"
+      - "scripts/write-native-config.js"
+      - ".github/workflows/ios-ipa.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    env:
+      WINE_SERVER_URL: https://eiter.freeboxos.fr/wine
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump build number (CI)
+        run: |
+          BUILD="${{ github.run_number }}"
+          perl -i -pe "s/^(\s*CURRENT_PROJECT_VERSION:\s*).*/\${1}\"$BUILD\"/" native-ios/project.yml
+          echo "Build number → $BUILD"
+
+      - name: XcodeGen
+        run: brew install xcodegen
+
+      - name: Build IPA (xcodebuild)
+        run: |
+          chmod +x scripts/build-native-ipa.sh
+          scripts/build-native-ipa.sh
+
+      - name: Vérifier IPA
+        run: |
+          APP="$(find build/Payload -maxdepth 1 -name '*.app' -type d | head -1)"
+          test -n "$APP"
+          BIN="$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")"
+          test -f "$APP/$BIN"
+          file "$APP/$BIN" | grep -E "Mach-O.*arm64"
+          ! find build/Payload -name "index.html" | grep -q .
+          cp -f build/Weeno.ipa build/WeenoOff.ipa 2>/dev/null || cp -f build/*.ipa build/WeenoOff.ipa
+
+      - name: Release GitHub (IPA)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-build-${{ github.run_number }}
+          name: Weeno iOS build ${{ github.run_number }}
+          body: |
+            Build automatique Weeno iOS.
+
+            Le serveur Plexi synchronise cette release vers le portail :
+            https://eiter.freeboxos.fr/mobile/wine/
+          files: |
+            build/WeenoOff.ipa
+          make_latest: true
+
+      - name: Rappel portail auto
+        run: |
+          echo "✅ Release ios-build-${{ github.run_number }} publiée sur GitHub."
+          echo "Portail : https://eiter.freeboxos.fr/mobile/wine/"

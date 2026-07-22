@@ -1,0 +1,192 @@
+import SwiftUI
+
+struct GiftsSheetView: View {
+    @EnvironmentObject private var app: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var gifts: [GiftIdea] = []
+    @State private var users: [CoupleStats.CoupleUser] = []
+    @State private var partner = ""
+    @State private var search = ""
+    @State private var filterStyle = ""
+    @State private var minRating: Double = 0
+    @State private var errorMessage: String?
+
+    private var styleOptions: [String] {
+        Array(Set(gifts.compactMap(\.style).filter { !$0.isEmpty })).sorted()
+    }
+
+    private var filtered: [GiftIdea] {
+        gifts.filter { g in
+            if minRating > 0 {
+                if minRating >= 5, (g.rating ?? 0) < 4.99 { return false }
+                else if (g.rating ?? 0) < minRating { return false }
+            }
+            if !filterStyle.isEmpty, g.style != filterStyle { return false }
+            if !search.isEmpty {
+                let hay = WineFormatters.normalizeSearch("\(g.wineName) \(g.producer ?? "") \(g.style ?? "")")
+                if !hay.contains(WineFormatters.normalizeSearch(search)) { return false }
+            }
+            return true
+        }
+    }
+
+    var body: some View {
+        WeenoOverlayScreen(
+            title: partner.isEmpty ? "Idées cadeaux" : "Idées cadeaux — \(partner)",
+            onClose: { dismiss() }
+        ) {
+            VStack(spacing: 12) {
+                if let errorMessage {
+                    Text(errorMessage).font(.footnote).foregroundStyle(Theme.error)
+                }
+                coupleStatsRow
+                WeenoGiftsFiltersRow(
+                    search: $search,
+                    filterStyle: $filterStyle,
+                    minRating: $minRating,
+                    styleOptions: styleOptions
+                )
+
+                if filtered.isEmpty {
+                    Text("Aucune idée cadeau avec ces filtres.")
+                        .font(.system(size: Theme.Font.lead * 0.94))
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                } else {
+                    LazyVStack(spacing: 10) {
+                        ForEach(filtered) { g in
+                            giftCard(g)
+                        }
+                    }
+                }
+            }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private var coupleStatsRow: some View {
+        HStack(spacing: 8) {
+            ForEach(users) { u in
+                VStack(spacing: 2) {
+                    Text(u.username == app.user ? "Toi" : u.username)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                    Text("\(u.total)")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Theme.text)
+                    Text("dégust.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(9)
+                .background(Theme.card)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private func giftCard(_ g: GiftIdea) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            WineImage(path: g.photoPath.map {
+                let root = ServerSettings.isAlphaBase(ServerSettings.effectiveBase) ? "/wine" : "/wine"
+                return "\(root)/photos/\(($0 as NSString).lastPathComponent)"
+            })
+                .frame(width: 88, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+            VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .top, spacing: 4) {
+                        Text(g.wineName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if (g.rating ?? 0) >= 4.99 {
+                            Text("♥").foregroundStyle(Theme.error)
+                        }
+                    }
+                    Text("\(g.producer ?? "—") · \(g.style ?? "?")")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 4) {
+                    Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.starOff)
+                        .overlay(alignment: .leading) {
+                            Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.star)
+                                .mask { Rectangle().frame(width: WineFormatters.starFillWidth(g.rating ?? 0)) }
+                        }
+                    Text(WineFormatters.ratingLabel(g.rating ?? 0))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                Text("Notée par \(g.likedBy ?? "?")")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.accent)
+                if let d = g.createdAt {
+                    Text("Dégustée le \(WineFormatters.formatDate(d))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                }
+                if let c = g.comment, !c.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ce qu'elle en a dit :")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                        Text("« \(c) »")
+                            .font(.system(size: 13))
+                            .italic()
+                            .foregroundStyle(Theme.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                    .background(Theme.bg.opacity(0.55))
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(Theme.accent).frame(width: 3)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Color.clear.frame(height: 52)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 148)
+        .padding(12)
+        .background(Theme.card)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func applyGifts(_ data: CoupleStats) {
+        let me = app.user ?? ""
+        users = data.users ?? []
+        partner = data.users?.first { $0.username != me }?.username ?? ""
+        gifts = (data.giftIdeas ?? []).filter { $0.forUser == me || $0.forUser == nil }
+    }
+
+    private func load() async {
+        if gifts.isEmpty, let cached = app.cache.load(CoupleStats.self, name: CacheKey.gifts) {
+            applyGifts(cached)
+        }
+        do {
+            let data = try await app.api.coupleStats()
+            app.cache.save(data, name: CacheKey.gifts)
+            applyGifts(data)
+            errorMessage = nil
+        } catch let err {
+            if let cached = app.cache.load(CoupleStats.self, name: CacheKey.gifts) {
+                applyGifts(cached)
+                errorMessage = "Données en cache — \(app.networkStatus.label.lowercased())"
+            } else {
+                errorMessage = err.localizedDescription
+            }
+        }
+    }
+}

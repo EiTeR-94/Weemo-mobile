@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1419" />
+  <title>Weeno — téléchargement</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a222c;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #c45c7a;
+      --border: #2d3a4a;
+      --ios: #60a5fa;
+      --android: #34d399;
+      --ok: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(196, 92, 122, 0.14), transparent),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 1.25rem;
+      padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+    }
+    .shell { width: 100%; max-width: 420px; }
+    .brand { text-align: center; margin-bottom: 1rem; }
+    .brand .ico { font-size: 2.5rem; line-height: 1; margin-bottom: 0.35rem; }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .brand p {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .notice {
+      background: color-mix(in srgb, var(--accent) 10%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+      border-radius: 12px;
+      padding: 0.7rem 0.85rem;
+      margin-bottom: 0.9rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .notice strong { color: var(--text); }
+    .versions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.45rem;
+      margin-bottom: 0.85rem;
+    }
+    .vchip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.55rem 0.4rem;
+      text-align: center;
+    }
+    .vchip.ios { border-color: color-mix(in srgb, var(--ios) 40%, var(--border)); }
+    .vchip.and { border-color: color-mix(in srgb, var(--android) 40%, var(--border)); }
+    .vchip .k {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .vchip .v {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .vchip .b {
+      display: block;
+      margin-top: 0.12rem;
+      font-size: 0.62rem;
+      color: var(--muted);
+    }
+    .vchip .d {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.6rem;
+      color: var(--accent);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .card h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .card .verline {
+      margin: 0 0 0.55rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .card .verline strong { color: var(--text); }
+    .card .meta {
+      margin: 0 0 0.85rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      width: 100%;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      border: none;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-decoration: none;
+      cursor: pointer;
+      color: #111;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-ios { background: linear-gradient(180deg, #93c5fd, var(--ios)); }
+    .btn-android { background: linear-gradient(180deg, #6ee7b7, var(--android)); }
+    .btn-ghost {
+      margin-top: 0.55rem;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 0.84rem;
+      font-weight: 650;
+      padding: 0.65rem 0.85rem;
+    }
+    .btn-ghost[aria-expanded="true"] {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+      color: var(--accent);
+    }
+    .btn-ghost .chev {
+      margin-left: 0.25rem;
+      opacity: 0.75;
+      transition: transform 0.15s ease;
+      display: inline-block;
+    }
+    .btn-ghost[aria-expanded="true"] .chev {
+      transform: rotate(180deg);
+    }
+    .hint {
+      margin-top: 0.55rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    /* Mini-tuto (même page) */
+    .tuto {
+      display: none;
+      margin-top: 0.75rem;
+      padding: 0.75rem 0.8rem;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--bg) 55%, var(--card));
+    }
+    .tuto.is-open { display: block; }
+    .tuto-title {
+      margin: 0 0 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .tuto.ios .tuto-title { color: var(--ios); }
+    .tuto.and .tuto-title { color: var(--android); }
+    .tuto ol {
+      margin: 0;
+      padding: 0 0 0 1.15rem;
+      color: var(--text);
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+    .tuto li { margin: 0.35rem 0; padding-left: 0.15rem; }
+    .tuto li strong { color: var(--text); font-weight: 700; }
+    .tuto .note {
+      margin: 0.65rem 0 0;
+      padding: 0.5rem 0.6rem;
+      border-radius: 10px;
+      font-size: 0.74rem;
+      line-height: 1.4;
+      color: var(--muted);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+    }
+    .tuto .note strong { color: var(--accent); }
+    .tuto a {
+      color: var(--ios);
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px solid color-mix(in srgb, var(--ios) 40%, transparent);
+    }
+    .tuto.and a { color: var(--android); border-bottom-color: color-mix(in srgb, var(--android) 40%, transparent); }
+    .tuto a:hover { color: var(--text); }
+    .tuto-sublinks {
+      display: block;
+      margin-top: 0.25rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .tuto-sublinks a {
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom-color: color-mix(in srgb, var(--muted) 35%, transparent);
+    }
+    .tuto-sublinks a:hover { color: var(--ios); }
+    .foot {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .foot a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand">
+      <div class="ico" aria-hidden="true">🍷</div>
+      <h1>Weeno</h1>
+      <p>Télécharge l’app native, puis suis le mini-guide d’installation.</p>
+    </div>
+
+    <div class="notice" id="notice">
+      <strong>IPA et APK se mettent à jour séparément.</strong>
+      Regarde la version de <em>ta</em> plateforme ci-dessous avant d’installer.
+    </div>
+
+    <div class="versions" id="versions" aria-live="polite">
+      <div class="vchip ios">
+        <span class="k">iOS · IPA</span>
+        <span class="v" id="v-ios">…</span>
+        <span class="b" id="b-ios"></span>
+        <span class="d" id="d-ios"></span>
+      </div>
+      <div class="vchip and">
+        <span class="k">Android · APK</span>
+        <span class="v" id="v-and">…</span>
+        <span class="b" id="b-and"></span>
+        <span class="d" id="d-and"></span>
+      </div>
+      <div class="vchip">
+        <span class="k">Webapp</span>
+        <span class="v" id="v-web">…</span>
+        <span class="b" id="b-web"></span>
+        <span class="d" id="d-web"></span>
+      </div>
+    </div>
+
+    <section class="card" id="card-ios">
+      <h2>🍎 iPhone · iPad</h2>
+      <p class="verline" id="line-ios">Version : …</p>
+      <p class="meta">
+        Fichier <strong>WeenoOff.ipa</strong> — pas d’App Store.
+        Installation via <strong>Sideloadly</strong> (PC ou Mac).
+      </p>
+      <a class="btn btn-ios" href="/mobile/wine/weenooff.ipa" download="WeenoOff.ipa">Télécharger l’IPA</a>
+      <button
+        type="button"
+        class="btn btn-ghost"
+        id="btn-tuto-ios"
+        aria-expanded="false"
+        aria-controls="tuto-ios"
+      >
+        Comment installer ? <span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="tuto ios" id="tuto-ios" hidden>
+        <p class="tuto-title">Mini-guide iOS</p>
+        <ol>
+          <li>
+            Sur un <strong>PC Windows ou un Mac</strong>, télécharge et installe
+            <strong>Sideloadly</strong> :
+            <a href="https://sideloadly.io/SideloadlySetup64.exe" target="_blank" rel="noopener noreferrer">Windows (64-bit)</a>,
+            <a href="https://sideloadly.io/SideloadlySetup.dmg" target="_blank" rel="noopener noreferrer">macOS</a>
+            <span class="tuto-sublinks">
+              · <a href="https://sideloadly.io/SideloadlySetup32.exe" target="_blank" rel="noopener noreferrer">Windows 32-bit</a>
+              · <a href="https://sideloadly.io/" target="_blank" rel="noopener noreferrer">site officiel</a>
+            </span>
+          </li>
+          <li>
+            Télécharge l’IPA ci-dessus — fichier <strong>WeenoOff.ipa</strong>.
+          </li>
+          <li>
+            Branche l’iPhone en USB, ouvre Sideloadly, glisse l’IPA,
+            connecte-toi avec ton <strong>Apple ID</strong> (compte gratuit OK).
+          </li>
+          <li>
+            Lance l’install. Sur l’iPhone :
+            <strong>Réglages → Général → VPN et gestion de l’appareil</strong>
+            → fais confiance au développeur.
+          </li>
+          <li>
+            Ouvre Weeno. Compte maison : Wi‑Fi / VPN.
+            Invité : colle le lien d’invitation dans l’app.
+          </li>
+        </ol>
+        <p class="note">
+          <strong>Important :</strong> sans Sideloadly (ou équivalent), l’IPA
+          ne s’installe pas toute seule. À refaire ~tous les 7 jours avec un
+          Apple ID gratuit (signature temporaire).
+        </p>
+      </div>
+      <p class="hint">Après install : Wi‑Fi maison / VPN, ou lien d’invitation en 4G/5G.</p>
+    </section>
+
+    <section class="card" id="card-and">
+      <h2>🤖 Android</h2>
+      <p class="verline" id="line-and">Version : …</p>
+      <p class="meta">
+        Fichier <strong>WeenoOff.apk</strong> — autorise les « sources inconnues »
+        si Android le demande.
+      </p>
+      <a class="btn btn-android" href="/mobile/wine/weenooff.apk" download="WeenoOff.apk">Télécharger l’APK</a>
+      <button
+        type="button"
+        class="btn btn-ghost"
+        id="btn-tuto-and"
+        aria-expanded="false"
+        aria-controls="tuto-and"
+      >
+        Comment installer ? <span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <div class="tuto and" id="tuto-and" hidden>
+        <p class="tuto-title">Mini-guide Android</p>
+        <ol>
+          <li>
+            Télécharge l’APK ci-dessus — fichier <strong>WeenoOff.apk</strong>.
+          </li>
+          <li>
+            Ouvre le fichier téléchargé. Si demandé, autorise
+            <strong>Installer des apps inconnues</strong> pour ton navigateur / Fichiers.
+          </li>
+          <li>
+            Valide l’installation (ou la <strong>mise à jour</strong> si tu as déjà l’app).
+            <strong>Pas besoin de désinstaller</strong> l’ancienne version — les données
+            et le compte sont conservés.
+          </li>
+          <li>
+            Ouvre l’app. Compte maison : Wi‑Fi / VPN. Invité : lien d’invitation.
+          </li>
+        </ol>
+        <p class="note">
+          Les mises à jour se font en téléchargeant la nouvelle APK par-dessus l’ancienne
+          (même signature). Pas de Play Store.
+        </p>
+      </div>
+      <p class="hint">Cycle de maj indépendant de l’iPhone — compare avec la version dans l’app.</p>
+    </section>
+
+    <p class="foot">Plexi · <a href="/beer/">webapp Weeno</a></p>
+  </main>
+  <script>
+    function setText(id, t) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = t || "";
+    }
+    function line(ver, build, when) {
+      var s = "Version <strong>" + (ver || "?") + "</strong>";
+      if (build) s += " · build " + build;
+      if (when) s += "<br>Dernière maj : <strong>" + when + "</strong>";
+      return s;
+    }
+
+    function bindTuto(btnId, panelId) {
+      var btn = document.getElementById(btnId);
+      var panel = document.getElementById(panelId);
+      if (!btn || !panel) return;
+      btn.addEventListener("click", function () {
+        var open = panel.classList.toggle("is-open");
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+          try {
+            panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          } catch (e) {}
+        }
+      });
+    }
+    bindTuto("btn-tuto-ios", "tuto-ios");
+    bindTuto("btn-tuto-and", "tuto-and");
+
+    fetch("/mobile/wine/versions.json?_=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v) return;
+        setText("v-ios", v.ios || "?");
+        setText("b-ios", v.ios_build ? "build " + v.ios_build : "");
+        setText("d-ios", v.ios_updated_at ? "maj " + v.ios_updated_at : "");
+
+        setText("v-and", v.android || "?");
+        setText("b-and", v.android_build ? "build " + v.android_build : "");
+        setText("d-and", v.android_updated_at ? "maj " + v.android_updated_at : "");
+
+        setText("v-web", v.webapp || "?");
+        setText("b-web", "serveur");
+        setText("d-web", v.webapp_updated_at ? "maj " + v.webapp_updated_at : "");
+
+        var li = document.getElementById("line-ios");
+        if (li) li.innerHTML = line(v.ios, v.ios_build, v.ios_updated_at);
+        var la = document.getElementById("line-and");
+        if (la) la.innerHTML = line(v.android, v.android_build, v.android_updated_at);
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>
