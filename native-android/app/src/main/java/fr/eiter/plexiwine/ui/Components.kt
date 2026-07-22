@@ -467,7 +467,7 @@ fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier, showNumber: B
     }
 }
 
-/** Menu multi-sélection tags — dialogue liste + filtre (pas de chips). */
+/** Menu multi-sélection tags — dialog compact téléphone (pas de chips). */
 @Composable
 fun WeenoTagDropdownField(
     label: String,
@@ -491,7 +491,7 @@ fun WeenoTagDropdownField(
     Column(modifier = modifier.fillMaxWidth()) {
         if (label.isNotBlank()) {
             Text(label, color = WineColors.muted, fontSize = 12.sp)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(3.dp))
         }
         Row(
             Modifier
@@ -503,37 +503,45 @@ fun WeenoTagDropdownField(
                     filter = ""
                     open = true
                 }
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 summary,
                 color = if (selected.isEmpty()) WineColors.muted else WineColors.text,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            Text("▾", color = WineColors.muted, fontSize = 12.sp)
+            Text("▾", color = WineColors.muted, fontSize = 11.sp)
         }
         if (selected.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             selected.sorted().forEach { tag ->
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 2.dp),
+                        .padding(vertical = 1.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(tag, color = WineColors.accent, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     Text(
-                        "retirer",
-                        color = WineColors.muted,
+                        tag,
+                        color = WineColors.accent,
                         fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "×",
+                        color = WineColors.muted,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .clickable { onToggle(tag) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -542,32 +550,41 @@ fun WeenoTagDropdownField(
     if (open) {
         Dialog(onDismissRequest = { open = false }) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = WineColors.card,
+                // Compact téléphone : ~40% écran max, marges latérales
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
+                    .fillMaxWidth(0.94f)
+                    .heightIn(max = 340.dp)
             ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Tags prédéfinis",
-                        color = WineColors.text,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "${selected.size}/$maxCount sélectionnés",
-                        color = WineColors.muted,
-                        fontSize = 12.sp
-                    )
-                    Spacer(Modifier.height(10.dp))
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Tags",
+                            color = WineColors.text,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "${selected.size}/$maxCount",
+                            color = WineColors.muted,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = filter,
                         onValueChange = { filter = it },
-                        placeholder = { Text("Filtrer…", color = WineColors.muted) },
+                        placeholder = { Text("Filtrer…", color = WineColors.muted, fontSize = 13.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 48.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = WineColors.text,
                             unfocusedTextColor = WineColors.text,
@@ -577,14 +594,14 @@ fun WeenoTagDropdownField(
                             focusedContainerColor = WineColors.fieldBg,
                             unfocusedContainerColor = WineColors.fieldBg
                         ),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(8.dp)
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f, fill = false)
-                            .heightIn(max = 340.dp)
+                            .heightIn(max = 200.dp)
                     ) {
                         items(filtered, key = { it }) { tag ->
                             val on = tag in selected
@@ -594,30 +611,32 @@ fun WeenoTagDropdownField(
                                     .clickable {
                                         if (on || selected.size < maxCount) onToggle(tag)
                                     }
-                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                    .padding(vertical = 8.dp, horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     tag,
                                     color = if (on) WineColors.accent else WineColors.text,
                                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                                    fontSize = 15.sp,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
                                     if (on) "✓" else "○",
                                     color = if (on) WineColors.accent else WineColors.muted,
-                                    fontSize = 16.sp
+                                    fontSize = 14.sp
                                 )
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     TextButton(
                         onClick = { open = false },
                         modifier = Modifier.align(Alignment.End)
                     ) {
-                        Text("OK", color = WineColors.accent, fontWeight = FontWeight.SemiBold)
+                        Text("OK", color = WineColors.accent, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     }
                 }
             }

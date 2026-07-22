@@ -1137,18 +1137,43 @@ class WineAPI private constructor(context: Context) {
     suspend fun adminUsers(): List<AdminUser> = withContext(Dispatchers.IO) {
         val (body, code) = execute(requestBuilder("api/admin/users").get().build())
         if (code !in 200..299) return@withContext emptyList()
-        val type = object : TypeToken<List<AdminUser>>() {}.type
-        gson.fromJson<List<AdminUser>>(body, type) ?: emptyList()
+        // Array (parité Beer) ou ancien wrapper {users:[…]}
+        try {
+            val type = object : TypeToken<List<AdminUser>>() {}.type
+            gson.fromJson<List<AdminUser>>(body, type)?.takeIf { true }?.let { list ->
+                // Si le JSON est un objet, Gson renvoie null ou crash — try wrap
+                if (body.trimStart().startsWith("[")) return@withContext list
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            val wrap = gson.fromJson(body, AdminUsersWrap::class.java)
+            if (wrap?.users != null) return@withContext wrap.users
+        } catch (_: Exception) {
+        }
+        try {
+            val type = object : TypeToken<List<AdminUser>>() {}.type
+            return@withContext gson.fromJson<List<AdminUser>>(body, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     suspend fun adminCreateUser(username: String, password: String, isAdmin: Boolean) {
         val json = gson.toJson(
             mapOf("username" to username, "password" to password, "is_admin" to isAdmin)
         )
-        val (_, code) = execute(
+        val (body, code) = execute(
             requestBuilder("api/admin/users").post(json.toRequestBody(JSON)).build()
         )
-        if (code !in 200..299) throw ApiException("Création compte impossible", code)
+        if (code !in 200..299) {
+            val err = try {
+                gson.fromJson(body, CreateInviteResponse::class.java)?.error
+            } catch (_: Exception) {
+                null
+            }
+            throw ApiException(err ?: "Création compte impossible", code)
+        }
     }
 
     suspend fun adminDeleteUser(username: String) {

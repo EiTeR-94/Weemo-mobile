@@ -15,6 +15,11 @@ data class AdminUser(
     @SerializedName("breweries_count") val breweriesCount: Int? = null,
 )
 
+/** Ancien format backend { "users": [ … ] } */
+data class AdminUsersWrap(
+    val users: List<AdminUser> = emptyList(),
+)
+
 data class InviteClientProfile(
     val browser: String? = null,
     val os: String? = null,

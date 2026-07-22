@@ -655,6 +655,11 @@ struct FlavorsResponse: Decodable {
 struct OKResponse: Decodable {
     let ok: Bool?
     let error: String?
+    let detail: String?  // FastAPI HTTPException
+}
+
+struct AdminUsersWrap: Decodable {
+    let users: [AdminUser]
 }
 
 // (legacy structs removed)

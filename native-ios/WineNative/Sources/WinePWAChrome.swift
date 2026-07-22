@@ -159,7 +159,7 @@ struct WeenoFormSelectField: View {
     }
 }
 
-/// Menu multi-sélection tags prédéfinis (sheet liste + recherche, pas chips).
+/// Menu multi-sélection tags prédéfinis — sheet compact téléphone (pas chips).
 struct WeenoTagDropdownField: View {
     let label: String
     let tags: [String]
@@ -169,6 +169,8 @@ struct WeenoTagDropdownField: View {
 
     @State private var open = false
     @State private var filter = ""
+    /// Hauteur réduite par défaut (téléphone) ; on peut tirer un peu plus.
+    @State private var sheetDetent: PresentationDetent = .height(280)
 
     private var filtered: [String] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -184,25 +186,29 @@ struct WeenoTagDropdownField: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             if !label.isEmpty {
                 Text(label)
                     .font(.system(size: Theme.Font.field))
                     .foregroundStyle(Theme.muted)
             }
-            Button { open = true } label: {
+            Button {
+                filter = ""
+                sheetDetent = .height(280)
+                open = true
+            } label: {
                 HStack(spacing: 8) {
                     Text(summary)
                         .lineLimit(1)
                         .foregroundStyle(selected.isEmpty ? Theme.muted : Theme.text)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.muted)
                 }
-                .font(.system(size: 15))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 11)
+                .font(.system(size: 14))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.fieldBg)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
@@ -210,50 +216,54 @@ struct WeenoTagDropdownField: View {
             }
             .buttonStyle(.plain)
             if !selected.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(selected).sorted(), id: \.self) { tag in
-                        HStack {
+                        HStack(spacing: 6) {
                             Text(tag)
-                                .font(.system(size: 13))
+                                .font(.system(size: 12))
                                 .foregroundStyle(Theme.accent)
+                                .lineLimit(1)
                             Spacer(minLength: 0)
-                            Button("retirer") {
+                            Button("×") {
                                 selected.remove(tag)
                             }
-                            .font(.system(size: 12))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Theme.muted)
                             .buttonStyle(.plain)
                         }
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
             }
         }
         .sheet(isPresented: $open) {
             NavigationStack {
                 VStack(spacing: 0) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
+                            .font(.system(size: 13))
                             .foregroundStyle(Theme.muted)
                         TextField("Filtrer…", text: $filter)
+                            .font(.system(size: 14))
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .foregroundStyle(Theme.text)
                     }
-                    .padding(12)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                     .background(Theme.fieldBg)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
 
                     Text("\(selected.count)/\(maxCount) sélectionnés")
-                        .font(.caption)
+                        .font(.system(size: 11))
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 6)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 2)
 
                     List {
                         ForEach(filtered, id: \.self) { tag in
@@ -266,35 +276,35 @@ struct WeenoTagDropdownField: View {
                                     selected.insert(tag)
                                 }
                             } label: {
-                                HStack {
+                                HStack(spacing: 8) {
                                     Text(tag)
+                                        .font(.system(size: 14))
                                         .foregroundStyle(Theme.text)
+                                        .lineLimit(1)
                                     if isSug {
                                         Text("Vivino")
-                                            .font(.system(size: 10, weight: .bold))
+                                            .font(.system(size: 9, weight: .bold))
                                             .foregroundStyle(Theme.star)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
                                             .overlay(Capsule().stroke(Theme.star.opacity(0.5), lineWidth: 0.5))
                                     }
-                                    Spacer()
-                                    if on {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(Theme.accent)
-                                    } else {
-                                        Image(systemName: "circle")
-                                            .foregroundStyle(Theme.muted)
-                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(on ? Theme.accent : Theme.muted)
                                 }
                             }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                             .listRowBackground(Theme.card)
                         }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .environment(\.defaultMinListRowHeight, 36)
                 }
                 .background(Theme.bg)
-                .navigationTitle("Tags prédéfinis")
+                .navigationTitle("Tags")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -305,8 +315,14 @@ struct WeenoTagDropdownField: View {
                 }
                 .preferredColorScheme(.dark)
             }
-            .presentationDetents([.medium, .large])
+            // Téléphone : demi-écran compact par défaut (pas full-screen)
+            .presentationDetents([.height(280), .height(380), .fraction(0.55)], selection: $sheetDetent)
             .presentationDragIndicator(.visible)
+            .presentationContentInteraction(.scrolls)
+            .onAppear {
+                filter = ""
+                sheetDetent = .height(280)
+            }
         }
     }
 }

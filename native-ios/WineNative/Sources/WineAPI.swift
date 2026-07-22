@@ -1079,7 +1079,14 @@ final class WineAPI {
             if http.statusCode == 401 { NotificationCenter.default.post(name: .beerAuthExpired, object: nil) }
             throw WineAPIError.unauthorized
         }
-        return (try? JSONDecoder().decode([AdminUser].self, from: data)) ?? []
+        // Backend renvoie un array (parité Beer). Ancien format {users:[…]} encore accepté.
+        if let list = try? JSONDecoder().decode([AdminUser].self, from: data) {
+            return list
+        }
+        if let wrapped = try? JSONDecoder().decode(AdminUsersWrap.self, from: data) {
+            return wrapped.users
+        }
+        return []
     }
 
     func adminCreateUser(username: String, password: String, isAdmin: Bool) async throws {
@@ -1090,8 +1097,8 @@ final class WineAPI {
         ] as [String: Any])
         let (data, http, _) = try await request(path: "/api/admin/users", method: "POST", body: body, contentType: "application/json")
         if http.statusCode >= 400 {
-            let err = (try? JSONDecoder().decode(OKResponse.self, from: data))?.error
-            throw WineAPIError.server(err ?? "Création impossible")
+            let msg = Self.extractAPIError(data) ?? "Création impossible"
+            throw WineAPIError.server(msg)
         }
     }
 
@@ -1663,6 +1670,19 @@ final class WineAPI {
 
 
     // MARK: - HTTP helpers (Android execute)
+
+    /// Parse `error` (apps) ou `detail` (FastAPI HTTPException).
+    static func extractAPIError(_ data: Data) -> String? {
+        if let ok = try? JSONDecoder().decode(OKResponse.self, from: data) {
+            if let e = ok.error, !e.isEmpty { return e }
+            if let d = ok.detail, !d.isEmpty { return d }
+        }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let e = obj["error"] as? String, !e.isEmpty { return e }
+            if let d = obj["detail"] as? String, !d.isEmpty { return d }
+        }
+        return nil
+    }
 
     private func request(
         path: String,
