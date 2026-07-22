@@ -39,7 +39,7 @@ cd /home/eiter/wine-mobile
 
 ## IPA (GitHub Actions)
 
-1. Créer le repo GitHub (ex. `EiTeR-94/Weeno-mobile`)
+1. Créer le repo GitHub (ex. `EiTeR-94/Weemo-mobile`)
 2. Pousser ce dossier sur `main`
 3. Actions → **Build iOS IPA** (push `native-ios/**` ou workflow_dispatch)
 4. Secret optionnel : aucun requis si `WINE_SERVER_URL` est en dur dans le workflow
@@ -47,7 +47,7 @@ cd /home/eiter/wine-mobile
 
 ```bash
 # une fois le repo créé :
-export WINE_MOBILE_GITHUB_REPO="EiTeR-94/Weeno-mobile"
+export WINE_MOBILE_GITHUB_REPO="EiTeR-94/Weemo-mobile"
 /home/eiter/scripts/wine-mobile-sync-github.sh
 ```
 
@@ -69,3 +69,22 @@ Timer optionnel (comme beer-mobile-sync) :
 - **Weeno Quest** (RPG) : stub côté app (`enabled=false`) jusqu’au backend Quest
 - Domaine vin : search Vivino, scan étiquette Gemini, champs `wine_name` / `producer` / `wine_color`
 - Backend : `POST /api/login` JSON requis pour owners LAN/VPN
+
+## SideStore (même source que Beer)
+
+URL **fixe** (déjà dans SideStore) :
+
+```
+https://raw.githubusercontent.com/EiTeR-94/Beer-mobile/main/sidestore/eb96c143657bffaa0525017bf1046b52bdb356c4e8b5c3da/source.json
+```
+
+Après la 1ʳᵉ IPA (`WeenoOff.ipa`), la source liste **Beer Quest + Weeno**.
+
+```bash
+# sync IPA depuis GitHub Releases (Weemo-mobile)
+/home/eiter/scripts/wine-mobile-sync-github.sh
+# régénère source multi-app
+/home/eiter/scripts/beer-sidestore-source-generate.sh
+```
+
+Repo GitHub : https://github.com/EiTeR-94/Weemo-mobile

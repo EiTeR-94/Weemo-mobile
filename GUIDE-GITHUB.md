@@ -16,7 +16,7 @@ Sinon le workflow utilise déjà l’URL de prod en dur.
 2. Release `ios-build-N` avec `WeenoOff.ipa`
 3. Sur le serveur (~2 min si timer) :
    ```bash
-   export WINE_MOBILE_GITHUB_REPO=EiTeR-94/Weeno-mobile
+   export WINE_MOBILE_GITHUB_REPO=EiTeR-94/Weemo-mobile
    /home/eiter/scripts/wine-mobile-sync-github.sh
    ```
 4. Portail : https://eiter.freeboxos.fr/mobile/wine/
