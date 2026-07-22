@@ -42,7 +42,13 @@ struct WineWizardView: View {
     @State private var flavorTags: [String] = []
     @State private var hopTags: [String] = []
     @State private var showFlavors = true
-    @State private var showHops = true
+    @State private var showHops = false
+    @State private var showFlavorBrowse = false
+    @State private var noteVintage = ""
+    @State private var noteColor = ""
+    @State private var noteRegion = ""
+    @State private var noteCountry = ""
+    @State private var noteAbv = ""
     @State private var saving = false
     @State private var showDuplicate = false
     @State private var duplicateDetail = ""
@@ -319,7 +325,7 @@ struct WineWizardView: View {
         return "Goûts \(product.displayStyle)"
     }
 
-    // MARK: - Step 3
+    // MARK: - Step 3 (parité webapp Note)
 
     private var stepRating: some View {
         Group {
@@ -330,75 +336,79 @@ struct WineWizardView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
+                Text("Note")
+                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                    .foregroundStyle(Theme.text)
                 VivinoRatingSlider(rating: $rating)
             }
             .beerCard()
 
-            if showFlavors {
-                if !flavorTags.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        FlavorTagGrid(title: flavorTagsTitle, tags: flavorTags, selected: $flavors, maxCount: 8)
-                    }
-                    .beerCard()
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Goûts perso")
-                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    CustomTagInput(
-                        placeholder: "ex. pneus, sucrée, vanille fumée…",
-                        input: $customFlavorInput,
-                        selected: $flavors,
-                        maxCount: 8
-                    )
-                    CustomTagChips(selected: $flavors, customOnly: flavors.subtracting(Set(flavorTags)))
-                    Text("Libre — 8 goûts max au total")
-                        .font(.system(size: Theme.Font.lead * 0.94))
-                        .foregroundStyle(Theme.muted)
-                }
-                .beerCard()
-            }
-            if showHops {
-                if !hopTags.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        FlavorTagGrid(title: "Houblons", tags: hopTags, selected: $hops, maxCount: 6)
-                    }
-                    .beerCard()
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Houblons perso")
-                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    CustomTagInput(
-                        placeholder: "ex. Citra, Mosaic, Galaxy…",
-                        input: $customHopInput,
-                        selected: $hops,
-                        maxCount: 6,
-                        onRegister: { name in Task { try? await app.api.addHop(name) } }
-                    )
-                    CustomTagChips(selected: $hops, customOnly: hops.subtracting(Set(hopTags)))
-                    Text("Max ~6 houblons")
-                        .font(.system(size: Theme.Font.lead * 0.94))
-                        .foregroundStyle(Theme.muted)
-                }
-                .beerCard()
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Commentaire (optionnel, 300 car.)")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Arômes & structure")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                TextField("Terrasse, avec elle, à refaire…", text: $comment, axis: .vertical)
-                    .lineLimit(2...4)
+                Text("Top Vivino en or si dispo. × pour retirer. Ajoute les tiens.")
+                    .font(.system(size: Theme.Font.lead * 0.94))
+                    .foregroundStyle(Theme.muted)
+                if !flavors.isEmpty {
+                    CustomTagChips(selected: $flavors, customOnly: flavors)
+                }
+                CustomTagInput(
+                    placeholder: "ex. pierre chaude, salin…",
+                    input: $customFlavorInput,
+                    selected: $flavors,
+                    maxCount: 8
+                )
+                Button {
+                    showFlavorBrowse.toggle()
+                } label: {
+                    Text(showFlavorBrowse ? "Masquer les tags prédéfinis" : "Parcourir les tags prédéfinis…")
+                        .font(.system(size: Theme.Font.ghost, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                if showFlavorBrowse, !flavorTags.isEmpty {
+                    FlavorTagGrid(title: "Tags", tags: flavorTags, selected: $flavors, maxCount: 8)
+                }
+            }
+            .beerCard()
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Détails")
+                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
+                WeenoFormSelectField(
+                    label: "Couleur",
+                    value: noteColor,
+                    options: [
+                        ("", "—"),
+                        ("rouge", "Rouge"), ("blanc", "Blanc"), ("rose", "Rosé"),
+                        ("effervescent", "Effervescent"), ("orange", "Orange"),
+                        ("fortifie", "Fortifié"), ("autre", "Autre"),
+                    ],
+                    onSelect: { noteColor = $0 }
+                )
+                WeenoField(label: "Région", text: $noteRegion, placeholder: "ex. Saint-Aubin…")
+                WeenoField(label: "Pays", text: $noteCountry, placeholder: "France")
+                WeenoField(label: "Degré (%)", text: $noteAbv, placeholder: "13.5", keyboard: .decimalPad)
+            }
+            .beerCard()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Commentaire")
+                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                TextField("Nez, bouche, accord…", text: $comment, axis: .vertical)
+                    .lineLimit(2...5)
                     .onChange(of: comment, perform: { v in
-                        if v.count > 300 { comment = String(v.prefix(300)) }
+                        if v.count > 500 { comment = String(v.prefix(500)) }
                     })
                     .padding(12)
                     .background(Theme.fieldBg)
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(Theme.text)
-                Text("\(comment.count)/300")
+                Text("\(comment.count)/500")
                     .font(.caption2)
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -423,24 +433,33 @@ struct WineWizardView: View {
         guard let raw = image.jpegData(compressionQuality: 0.92) else { return }
         let jpeg = WineImageUtils.compressJPEG(raw)
         busy = true
-        scanStatus = "Analyse de l’étiquette…"
+        scanStatus = "Analyse en cours… (Gemini)"
         defer { busy = false }
         do {
-            let scan = try await app.api.scanPhoto(jpeg: jpeg)
-            if scan.ok, let name = scan.wineName, !name.isEmpty {
-                product = scan.asProduct(fallbackBarcode: scan.barcode ?? "")
-                scanStatus = "Vin identifié ✓"
-                app.showToast("Vin identifié ✓", variant: .success, label: "Étiquette", durationMs: 2400)
-            } else if scan.ok {
-                // champs IA partiels — préremplir saisie
-                if let n = scan.wineName, !n.isEmpty { manualName = n }
-                if let p = scan.producer, !p.isEmpty { manualProducer = p }
-                if let c = scan.styleFr ?? scan.style, !c.isEmpty { manualStyle = c }
-                showManual = true
-                scanStatus = "Étiquette lue — complète ou cherche sur Vivino"
-                app.showToast("Complète le vin", variant: .info)
+            // Même endpoint webapp : POST /api/label-scan (Gemini 2 clés + candidats Vivino)
+            let scan = try await app.api.labelScan(jpeg: jpeg)
+            if let n = scan.wineName, !n.isEmpty {
+                vivinoQuery = [scan.producer, n].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+            }
+            if let p = scan.producer, !p.isEmpty { vivinoProducer = p }
+            if let v = scan.vintage { vivinoVintage = String(v); manualVintage = String(v) }
+            if let c = scan.wineColor, !c.isEmpty { manualStyle = c }
+            if let r = scan.region, !r.isEmpty { manualRegion = r }
+
+            if !scan.candidates.isEmpty {
+                vivinoResults = Array(scan.candidates.prefix(5))
+                scanStatus = scan.aiAvailable
+                    ? "Étiquette lue — choisis le bon vin"
+                    : "Scan partiel — suggestions Vivino"
+                app.showToast("\(scan.candidates.count) suggestion(s)", variant: .success)
+            } else if scan.aiAvailable {
+                scanStatus = "Étiquette lue — cherche sur Vivino"
+                if vivinoQuery.count >= 2 {
+                    await searchVivino()
+                }
             } else {
-                scanStatus = scan.error ?? "Étiquette non reconnue"
+                scanStatus = scan.aiError ?? "Scan indisponible — saisis ou cherche sur Vivino"
+                showManual = true
             }
         } catch let err {
             scanStatus = err.localizedDescription
@@ -498,35 +517,52 @@ struct WineWizardView: View {
     }
 
     private func selectVivino(_ hit: VivinoHit) async {
+        // Parité webapp : sélection immédiate puis enrichissement GET /api/vivino/{id}
+        product = WineProduct(
+            wineName: hit.wineName,
+            producer: hit.producer ?? "—",
+            style: hit.styleFr ?? "autre",
+            styleFr: hit.styleFr,
+            vivinoBid: hit.bid > 0 ? hit.bid : nil,
+            source: "vivino",
+            photoURL: hit.photoURL,
+            vintage: hit.vintage,
+            region: hit.region,
+            country: hit.country
+        )
+        if let v = hit.vintage { manualVintage = String(v) }
+        if let c = hit.styleFr { manualStyle = c }
+        vivinoResults = []
+        scanStatus = "Fiche sélectionnée — enrichissement…"
         busy = true
         defer { busy = false }
-        let ean = scannedCode.filter(\.isNumber)
+        guard hit.bid > 0 else {
+            scanStatus = "Vin prêt — continue vers la photo"
+            app.showToast("Vin sélectionné ✓", variant: .success)
+            return
+        }
         do {
-            let res: LookupResponse
-            if ean.count >= 8 {
-                res = try await app.api.linkProduct(
-                    bid: hit.bid,
-                    barcode: ean,
-                    wineName: hit.wineName,
-                    producer: hit.producer ?? ""
-                )
-            } else {
-                res = try await app.api.vivinoFetch(
-                    bid: hit.bid,
-                    barcode: scannedCode,
-                    wineName: hit.wineName,
-                    producer: hit.producer ?? ""
-                )
-            }
+            let res = try await app.api.vivinoFetch(
+                bid: hit.bid,
+                wineName: hit.wineName,
+                producer: hit.producer ?? "",
+                vintage: hit.vintage
+            )
             if res.ok {
-                product = res.asProduct(fallbackBarcode: ean.isEmpty ? scannedCode : ean)
-                scanStatus = "Vivino ✓"
-                vivinoResults = []
+                var p = res.asProduct(fallbackBarcode: "")
+                if p.wineName.isEmpty { p.wineName = hit.wineName }
+                if p.producer.isEmpty { p.producer = hit.producer ?? "—" }
+                product = p
+                if let sug = res.suggestedFlavors, !sug.isEmpty {
+                    flavors = Set(sug)
+                }
+                scanStatus = "Vin prêt — continue vers la photo"
+                app.showToast("Vin sélectionné ✓", variant: .success)
             } else {
-                vivinoError = res.error ?? "Fiche introuvable"
+                scanStatus = "Base OK (enrichissement partiel)"
             }
-        } catch let err {
-            vivinoError = err.localizedDescription
+        } catch {
+            scanStatus = "Base OK — enrichissement indisponible"
         }
     }
 
@@ -538,26 +574,44 @@ struct WineWizardView: View {
     }
 
     private func loadNotation() async {
-        guard let product, app.networkStatus == .online else { return }
-        do {
-            let n = try await app.api.flavors(style: product.style, description: product.summary)
-            flavorTags = n.flavors ?? []
-            hopTags = n.hops ?? []
-            showFlavors = n.showFlavorsBlock ?? true
-            // Weeno = arômes vin (pas de houblons bière)
-            showHops = false
-            hopTags = []
-            hops = []
-            flavors = Set(n.suggestedFlavors ?? [])
-        } catch {
-            flavorTags = []
-            hopTags = []
-            showHops = false
+        showHops = false
+        hopTags = []
+        hops = []
+        showFlavors = true
+        // Tags prédéfinis depuis /api/config (+ déjà sélectionnés via enrichissement Vivino)
+        if app.networkStatus == .online {
+            do {
+                flavorTags = try await app.api.configFlavors()
+            } catch {
+                flavorTags = []
+            }
+        }
+        if flavors.isEmpty, let sug = product?.suggestedFlavors, !sug.isEmpty {
+            flavors = Set(sug)
+        }
+        if let p = product {
+            if noteVintage.isEmpty, let v = p.vintage { noteVintage = String(v) }
+            if noteColor.isEmpty, let c = p.styleFr ?? (p.style != "Unknown" ? p.style : nil) {
+                noteColor = c
+            }
+            if noteRegion.isEmpty, let r = p.region { noteRegion = r }
+            if noteCountry.isEmpty, let c = p.country { noteCountry = c }
+            if noteAbv.isEmpty, let a = p.abv { noteAbv = String(a) }
         }
     }
 
     private func save(force: Bool) async {
-        guard let product else { return }
+        guard var product else { return }
+        // Appliquer détails étape Note (parité webapp)
+        if let v = Int(noteVintage), v > 0 { product.vintage = v }
+        if !noteColor.isEmpty {
+            product.style = noteColor
+            product.styleFr = noteColor
+        }
+        if !noteRegion.isEmpty { product.region = noteRegion }
+        if !noteCountry.isEmpty { product.country = noteCountry }
+        if let a = Double(noteAbv.replacingOccurrences(of: ",", with: ".")) { product.abv = a }
+        self.product = product
         saving = true
         defer { saving = false }
         do {
@@ -565,7 +619,7 @@ struct WineWizardView: View {
                 product: product,
                 rating: rating,
                 flavors: Array(flavors),
-                hops: Array(hops),
+                hops: [],
                 comment: comment,
                 photoJPEG: photoData,
                 force: force,
@@ -642,6 +696,12 @@ struct WineWizardView: View {
         hops = []
         customFlavorInput = ""
         customHopInput = ""
+        noteVintage = ""
+        noteColor = ""
+        noteRegion = ""
+        noteCountry = ""
+        noteAbv = ""
+        showFlavorBrowse = false
         scanStatus = "Cadre l’étiquette — touche pour photo"
         duplicateDetail = ""
     }

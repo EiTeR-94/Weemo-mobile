@@ -780,7 +780,10 @@ final class AppModel: ObservableObject {
                 vivinoBid: pending.vivinoBid,
                 force: pending.force,
                 photoJPEG: photoJPEG,
-                location: pending.location ?? ""
+                location: pending.location ?? "",
+                vintage: product.vintage,
+                region: product.region ?? "",
+                country: product.country ?? ""
             )
             if result.duplicate == true {
                 let pc = result.previousCheckin

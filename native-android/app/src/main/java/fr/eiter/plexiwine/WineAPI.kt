@@ -689,37 +689,48 @@ class WineAPI private constructor(context: Context) {
         execute(requestBuilder("api/checkins/$id/photo").delete().build())
     }
 
+    private fun jsonInt(el: com.google.gson.JsonElement?): Int? {
+        if (el == null || el.isJsonNull) return null
+        return try { el.asInt } catch (_: Exception) {
+            try { el.asDouble.toInt() } catch (_: Exception) {
+                el.asString.toIntOrNull()
+            }
+        }
+    }
+
+    private fun mapVivinoItem(o: com.google.gson.JsonObject): VivinoHit? {
+        val name = o.get("wine_name")?.asString ?: o.get("name")?.asString ?: return null
+        if (name.isBlank()) return null
+        return VivinoHit(
+            bid = jsonInt(o.get("vivino_id")) ?: jsonInt(o.get("id")) ?: 0,
+            wineName = name,
+            producer = o.get("producer")?.asString ?: o.get("winery")?.asString,
+            styleFr = o.get("wine_color")?.asString ?: o.get("type")?.asString,
+            photoURL = o.get("photo_url")?.asString ?: o.get("image")?.asString,
+            vintage = jsonInt(o.get("vintage")),
+            country = o.get("country")?.asString,
+            region = o.get("region")?.asString,
+            vivinoRating = try { o.get("vivino_rating")?.asDouble } catch (_: Exception) { null },
+            vivinoURL = o.get("vivino_url")?.asString
+        )
+    }
+
     suspend fun searchVivino(query: String): VivinoSearchResponse {
-        // Weeno: GET /api/search?q=
+        // Weeno: GET /api/search?q= → Algolia Vivino (serveur)
         val q = java.net.URLEncoder.encode(query, "UTF-8")
-        val (body, _) = execute(requestBuilder("api/search?q=$q&limit=8").get().build())
-        try {
+        val (body, _) = execute(requestBuilder("api/search?q=$q&limit=5").get().build())
+        return try {
             val root = com.google.gson.JsonParser.parseString(body).asJsonObject
             val items = root.getAsJsonArray("items")
             val hits = mutableListOf<VivinoHit>()
             if (items != null) {
                 for (el in items) {
-                    val o = el.asJsonObject
-                    val name = o.get("name")?.asString ?: o.get("wine_name")?.asString ?: ""
-                    val producer = o.get("producer")?.asString ?: o.get("winery")?.asString
-                    val id = o.get("id")?.asInt ?: o.get("vivino_id")?.asInt ?: 0
-                    val color = o.get("type")?.asString ?: o.get("wine_color")?.asString
-                    val photo = o.get("image")?.asString ?: o.get("photo_url")?.asString
-                    hits.add(
-                        VivinoHit(
-                            bid = id,
-                            wineName = name,
-                            producer = producer,
-                            styleFr = color,
-                            photoURL = photo
-                        )
-                    )
+                    mapVivinoItem(el.asJsonObject)?.let { hits.add(it) }
                 }
             }
-            return VivinoSearchResponse(ok = true, results = hits)
+            VivinoSearchResponse(ok = true, results = hits)
         } catch (_: Exception) {
-            return gson.fromJson(body, VivinoSearchResponse::class.java)
-                ?: VivinoSearchResponse(ok = false)
+            VivinoSearchResponse(ok = false, error = "decode")
         }
     }
 
@@ -734,51 +745,71 @@ class WineAPI private constructor(context: Context) {
         bid: Int,
         barcode: String = "",
         wineName: String = "",
-        producer: String = ""
+        producer: String = "",
+        vintage: Int? = null
     ): LookupResponse {
-        // Weeno: GET /api/vivino/{wine_id} (enrichissement)
+        // Weeno: GET /api/vivino/{wine_id} → { fields, suggested_flavors }
         if (bid <= 0) {
             return LookupResponse(ok = false, error = "vivino_id invalide", wineName = wineName, producer = producer)
         }
-        val (body, code) = execute(requestBuilder("api/vivino/$bid").get().build())
+        var path = "api/vivino/$bid"
+        if (vintage != null && vintage > 0) path += "?vintage=$vintage"
+        val (body, code) = execute(requestBuilder(path).get().build())
         if (code >= 400) {
             return LookupResponse(ok = false, error = "Enrichissement Vivino KO", wineName = wineName, producer = producer, vivinoId = bid)
         }
         return try {
-            val o = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val root = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val o = root.getAsJsonObject("fields") ?: root
+            val sug = root.getAsJsonArray("suggested_flavors")?.mapNotNull {
+                try { it.asString } catch (_: Exception) { null }
+            }
             LookupResponse(
                 ok = true,
-                wineName = o.get("wine_name")?.asString ?: o.get("name")?.asString ?: wineName.ifBlank { null },
-                producer = o.get("producer")?.asString ?: o.get("winery")?.asString ?: producer.ifBlank { null },
-                style = o.get("wine_color")?.asString ?: o.get("type")?.asString,
+                wineName = o.get("wine_name")?.asString ?: wineName.ifBlank { null },
+                producer = o.get("producer")?.asString ?: producer.ifBlank { null },
+                style = o.get("wine_color")?.asString,
                 styleFr = o.get("wine_color")?.asString,
                 abv = o.get("abv")?.let { runCatching { it.asDouble }.getOrNull() },
                 vivinoId = bid,
-                photoURL = o.get("image")?.asString ?: o.get("photo_url")?.asString,
+                photoURL = o.get("photo_url")?.asString,
                 source = "vivino-enrich",
-                barcode = barcode.ifBlank { null }
-            )
+                barcode = barcode.ifBlank { null },
+                summary = listOfNotNull(o.get("region")?.asString, o.get("country")?.asString).joinToString(" · ")
+            ).also {
+                // vintage/region via product mapping in wizard from fields
+            }
         } catch (_: Exception) {
-            gson.fromJson(body, LookupResponse::class.java)
-                ?: LookupResponse(ok = false, error = "decode", vivinoId = bid)
+            LookupResponse(ok = false, error = "decode", vivinoId = bid)
         }
     }
 
-    suspend fun flavors(style: String, description: String = ""): FlavorsResponse {
-        val s = java.net.URLEncoder.encode(style, "UTF-8")
-        val d = java.net.URLEncoder.encode(description, "UTF-8")
-        val (body, _) = execute(requestBuilder("api/flavors?style=$s&description=$d").get().build())
-        return gson.fromJson(body, FlavorsResponse::class.java)
+    suspend fun configFlavors(): List<String> {
+        return try {
+            val (body, code) = execute(requestBuilder("api/config").get().build())
+            if (code !in 200..299) return emptyList()
+            val root = com.google.gson.JsonParser.parseString(body).asJsonObject
+            root.getAsJsonArray("flavors")?.mapNotNull {
+                try { it.asString } catch (_: Exception) { null }
+            }.orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
-    suspend fun flavorsAndHops(): FlavorsResponse = flavors(style = "", description = "")
+    suspend fun flavors(style: String = "", description: String = ""): FlavorsResponse {
+        val tags = configFlavors()
+        return FlavorsResponse(flavors = tags, suggestedFlavors = emptyList(), showFlavorsBlock = true, showHopsBlock = false)
+    }
+
+    suspend fun flavorsAndHops(): FlavorsResponse = flavors()
 
     suspend fun addHop(name: String) {
-        val json = gson.toJson(mapOf("name" to name))
-        execute(requestBuilder("api/hops").post(json.toRequestBody(JSON)).build())
+        // Weeno n'a pas de houblons — no-op (évite crash UI beer restante)
     }
 
-    suspend fun scanPhoto(jpeg: ByteArray): LookupResponse {
+    /** POST /api/label-scan — Gemini (2 clés failover) + candidats Vivino côté serveur. */
+    suspend fun labelScan(jpeg: ByteArray): LabelScanResult {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart(
                 "file",
@@ -787,38 +818,45 @@ class WineAPI private constructor(context: Context) {
             )
             .build()
         val (respBody, _) = execute(requestBuilder("api/label-scan").post(body).build())
-        // label-scan returns {ok, ai.fields, candidates} — map to LookupResponse
-        try {
-            val root = com.google.gson.JsonParser.parseString(respBody).asJsonObject
-            val fields = root.getAsJsonObject("ai")?.getAsJsonObject("fields")
-            val name = fields?.get("wine_name")?.asString.orEmpty()
-            val producer = fields?.get("producer")?.asString.orEmpty()
-            val color = fields?.get("wine_color")?.asString
-            val abv = fields?.get("abv")?.let { runCatching { it.asDouble }.getOrNull() }
-            val cands = root.getAsJsonArray("candidates")
-            var vivinoId: Int? = null
-            var photo: String? = null
-            if (cands != null && cands.size() > 0) {
-                val c0 = cands[0].asJsonObject
-                vivinoId = c0.get("id")?.asInt ?: c0.get("vivino_id")?.asInt
-                photo = c0.get("image")?.asString ?: c0.get("photo_url")?.asString
-            }
-            return LookupResponse(
-                ok = root.get("ok")?.asBoolean ?: true,
-                wineName = name.ifBlank { null },
-                producer = producer.ifBlank { null },
-                style = color,
-                styleFr = color,
-                abv = abv,
-                summary = listOf(producer, name).filter { it.isNotBlank() }.joinToString(" — "),
-                vivinoId = vivinoId,
-                source = "label-scan",
-                photoURL = photo
-            )
-        } catch (e: Exception) {
-            return gson.fromJson(respBody, LookupResponse::class.java)
-                ?: LookupResponse(ok = false, error = e.message)
+        val root = com.google.gson.JsonParser.parseString(respBody).asJsonObject
+        val ai = root.getAsJsonObject("ai")
+        val fields = ai?.getAsJsonObject("fields")
+        val cands = mutableListOf<VivinoHit>()
+        root.getAsJsonArray("candidates")?.forEach { el ->
+            mapVivinoItem(el.asJsonObject)?.let { cands.add(it) }
         }
+        return LabelScanResult(
+            ok = root.get("ok")?.asBoolean ?: true,
+            aiAvailable = ai?.get("available")?.asBoolean ?: false,
+            aiError = ai?.get("error")?.asString,
+            wineName = fields?.get("wine_name")?.asString,
+            producer = fields?.get("producer")?.asString,
+            wineColor = fields?.get("wine_color")?.asString,
+            vintage = jsonInt(fields?.get("vintage")),
+            abv = fields?.get("abv")?.let { runCatching { it.asDouble }.getOrNull() },
+            region = fields?.get("region")?.asString,
+            candidates = cands,
+            vivinoQuery = root.get("vivino_query")?.asString,
+            labelPhotoPath = root.get("label_photo_path")?.asString
+        )
+    }
+
+    suspend fun scanPhoto(jpeg: ByteArray): LookupResponse {
+        val scan = labelScan(jpeg)
+        val c0 = scan.candidates.firstOrNull()
+        return LookupResponse(
+            ok = scan.ok,
+            error = scan.aiError,
+            wineName = scan.wineName ?: c0?.wineName,
+            producer = scan.producer ?: c0?.producer,
+            style = scan.wineColor ?: c0?.styleFr,
+            styleFr = scan.wineColor ?: c0?.styleFr,
+            abv = scan.abv,
+            summary = listOfNotNull(scan.producer, scan.wineName).joinToString(" — "),
+            vivinoId = c0?.bid,
+            source = "label-scan",
+            photoURL = c0?.photoURL
+        )
     }
 
     suspend fun decodeBarcode(jpeg: ByteArray): DecodeBarcodeResponse {
@@ -873,7 +911,7 @@ class WineAPI private constructor(context: Context) {
             "abv" to abv.toDoubleOrNull(),
             "rating" to rating,
             "flavors" to flavors,
-            "comment" to comment.take(300),
+            "comment" to comment.take(500),
             "location" to location.trim().take(300),
             "barcode" to barcode,
             "force" to force,
@@ -1147,46 +1185,30 @@ class WineAPI private constructor(context: Context) {
         gson.fromJson(body, ReferentialsResponse::class.java) ?: ReferentialsResponse()
     }
 
-    suspend fun adminAddStyle(name: String) {
-        val json = gson.toJson(mapOf("name" to name))
-        val (_, code) = execute(
-            requestBuilder("api/config").post(json.toRequestBody(JSON)).build()
-        )
-        if (code !in 200..299) throw ApiException("Ajout style impossible", code)
-    }
-
-    suspend fun adminDeleteStyle(name: String) {
-        val enc = java.net.URLEncoder.encode(name, "UTF-8")
-        val (_, code) = execute(requestBuilder("api/styles/$enc").delete().build())
-        if (code !in 200..299) throw ApiException("Suppression style impossible", code)
-    }
-
-    suspend fun adminAddHop(name: String) {
-        val json = gson.toJson(mapOf("name" to name))
-        val (_, code) = execute(
-            requestBuilder("api/hops").post(json.toRequestBody(JSON)).build()
-        )
-        if (code !in 200..299) throw ApiException("Ajout houblon impossible", code)
-    }
-
-    suspend fun adminDeleteHop(name: String) {
-        val enc = java.net.URLEncoder.encode(name, "UTF-8")
-        val (_, code) = execute(requestBuilder("api/hops/$enc").delete().build())
-        if (code !in 200..299) throw ApiException("Suppression houblon impossible", code)
-    }
-
     suspend fun adminAddFlavor(name: String) {
-        val json = gson.toJson(mapOf("name" to name))
+        val json = gson.toJson(mapOf("name" to name, "kind" to "arome"))
         val (_, code) = execute(
-            requestBuilder("api/flavors/custom").post(json.toRequestBody(JSON)).build()
+            requestBuilder("api/admin/referentials/flavors").post(json.toRequestBody(JSON)).build()
         )
-        if (code !in 200..299) throw ApiException("Ajout goût impossible", code)
+        if (code !in 200..299) throw ApiException("Ajout arôme impossible", code)
     }
 
-    suspend fun adminDeleteFlavor(name: String) {
-        val enc = java.net.URLEncoder.encode(name, "UTF-8")
-        val (_, code) = execute(requestBuilder("api/flavors/custom/$enc").delete().build())
-        if (code !in 200..299) throw ApiException("Suppression goût impossible", code)
+    suspend fun adminDeleteFlavor(id: Int) {
+        val (_, code) = execute(requestBuilder("api/admin/referentials/flavors/$id").delete().build())
+        if (code !in 200..299) throw ApiException("Suppression arôme impossible", code)
+    }
+
+    suspend fun adminAddRegion(name: String) {
+        val json = gson.toJson(mapOf("name" to name))
+        val (_, code) = execute(
+            requestBuilder("api/admin/referentials/regions").post(json.toRequestBody(JSON)).build()
+        )
+        if (code !in 200..299) throw ApiException("Ajout région impossible", code)
+    }
+
+    suspend fun adminDeleteRegion(id: Int) {
+        val (_, code) = execute(requestBuilder("api/admin/referentials/regions/$id").delete().build())
+        if (code !in 200..299) throw ApiException("Suppression région impossible", code)
     }
 
     // ── Feedback admin + réponses joueur ────────────────────────────────────

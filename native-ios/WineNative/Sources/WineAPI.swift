@@ -1237,35 +1237,63 @@ final class WineAPI {
     }
 
     func vivinoSearch(query: String) async throws -> VivinoSearchResponse {
-        // Weeno: GET /api/search?q=
+        // Weeno: GET /api/search?q= → { query, items, source } (Algolia Vivino côté serveur)
         var components = URLComponents(url: try url("/api/search"), resolvingAgainstBaseURL: true)!
         components.queryItems = [
             URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "limit", value: "8"),
+            URLQueryItem(name: "limit", value: "5"),
         ]
         var req = URLRequest(url: components.url!)
         return try await NetworkManager.shared.withRetry {
             let (data, http, _) = try await self.performTransport(req)
             try self.throwIfUnauthorized(http.statusCode)
-            // Réponse: { query, items, source } — map vers VivinoSearchResponse si possible
-            if let decoded = try? JSONDecoder().decode(VivinoSearchResponse.self, from: data) {
-                return decoded
-            }
-            // Fallback: wrap items
             if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let items = root["items"] as? [[String: Any]] {
-                let hits: [VivinoHit] = items.compactMap { it in
-                    let name = (it["name"] as? String) ?? (it["wine_name"] as? String) ?? ""
-                    let producer = (it["producer"] as? String) ?? (it["winery"] as? String)
-                    let id = it["id"] as? Int ?? it["vivino_id"] as? Int ?? 0
-                    let color = (it["type"] as? String) ?? (it["wine_color"] as? String)
-                    let photo = (it["image"] as? String) ?? (it["photo_url"] as? String)
-                    return VivinoHit(bid: id, wineName: name, producer: producer, styleFr: color, photoURL: photo)
-                }
+                let hits = items.compactMap { Self.mapVivinoItem($0) }
                 return VivinoSearchResponse(ok: true, error: nil, results: hits)
             }
             throw WineAPIError.decode
         }
+    }
+
+    /// Parse un item Vivino backend (vivino_id, wine_name, photo_url…).
+    static func mapVivinoItem(_ it: [String: Any]) -> VivinoHit? {
+        let name = (it["wine_name"] as? String) ?? (it["name"] as? String) ?? ""
+        guard !name.isEmpty else { return nil }
+        let id = jsonInt(it["vivino_id"]) ?? jsonInt(it["id"]) ?? 0
+        let vintage = jsonInt(it["vintage"])
+        let rating: Double?
+        if let d = it["vivino_rating"] as? Double { rating = d }
+        else if let n = it["vivino_rating"] as? NSNumber { rating = n.doubleValue }
+        else { rating = nil }
+        return VivinoHit(
+            bid: id,
+            wineName: name,
+            producer: (it["producer"] as? String) ?? (it["winery"] as? String),
+            styleFr: (it["wine_color"] as? String) ?? (it["type"] as? String),
+            photoURL: (it["photo_url"] as? String) ?? (it["image"] as? String),
+            vintage: vintage,
+            country: it["country"] as? String,
+            region: it["region"] as? String,
+            vivinoRating: rating,
+            vivinoURL: it["vivino_url"] as? String
+        )
+    }
+
+    static func jsonInt(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let n = any as? NSNumber { return n.intValue }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        return nil
+    }
+
+    static func jsonDouble(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let n = any as? NSNumber { return n.doubleValue }
+        if let i = any as? Int { return Double(i) }
+        if let s = any as? String { return Double(s) }
+        return nil
     }
 
     func saveProduct(barcode: String, wineName: String, producer: String, style: String) async throws -> LookupResponse {
@@ -1324,8 +1352,8 @@ final class WineAPI {
         return decoded
     }
 
-    func scanPhoto(jpeg: Data) async throws -> LookupResponse {
-        // Weeno: POST /api/label-scan  field name = file
+    /// POST /api/label-scan — Gemini (+ failover 2 clés) côté serveur, candidats Vivino.
+    func labelScan(jpeg: Data) async throws -> LabelScanResult {
         let boundary = "WeenoScan-\(UUID().uuidString)"
         var req = URLRequest(url: try url("/api/label-scan"))
         req.httpMethod = "POST"
@@ -1342,29 +1370,40 @@ final class WineAPI {
         }
         let ai = root["ai"] as? [String: Any]
         let fields = ai?["fields"] as? [String: Any] ?? [:]
-        let name = fields["wine_name"] as? String
-        let producer = fields["producer"] as? String
-        let color = fields["wine_color"] as? String
-        let abv = fields["abv"] as? Double
-        var vid: Int? = nil
-        var photo: String? = nil
-        if let cands = root["candidates"] as? [[String: Any]], let c0 = cands.first {
-            vid = c0["id"] as? Int ?? c0["vivino_id"] as? Int
-            photo = (c0["image"] as? String) ?? (c0["photo_url"] as? String)
-        }
-        return LookupResponse(
+        let cands = (root["candidates"] as? [[String: Any]] ?? []).compactMap { Self.mapVivinoItem($0) }
+        return LabelScanResult(
             ok: (root["ok"] as? Bool) ?? true,
-            error: ai?["error"] as? String,
+            aiAvailable: (ai?["available"] as? Bool) ?? false,
+            aiError: ai?["error"] as? String,
+            wineName: fields["wine_name"] as? String,
+            producer: fields["producer"] as? String,
+            wineColor: fields["wine_color"] as? String,
+            vintage: Self.jsonInt(fields["vintage"]),
+            abv: Self.jsonDouble(fields["abv"]),
+            region: fields["region"] as? String,
+            candidates: cands,
+            vivinoQuery: root["vivino_query"] as? String,
+            labelPhotoPath: root["label_photo_path"] as? String
+        )
+    }
+
+    /// Compat: scan → LookupResponse (1er candidat / champs IA).
+    func scanPhoto(jpeg: Data) async throws -> LookupResponse {
+        let scan = try await labelScan(jpeg: jpeg)
+        let c0 = scan.candidates.first
+        return LookupResponse(
+            ok: scan.ok,
+            error: scan.aiError,
             barcode: nil,
-            wineName: name,
-            producer: producer,
-            style: color,
-            styleFr: color,
-            abv: abv,
-            summary: [producer, name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — "),
-            vivinoBid: vid,
+            wineName: scan.wineName ?? c0?.wineName,
+            producer: scan.producer ?? c0?.producer,
+            style: scan.wineColor ?? c0?.styleFr,
+            styleFr: scan.wineColor ?? c0?.styleFr,
+            abv: scan.abv,
+            summary: [scan.producer, scan.wineName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — "),
+            vivinoBid: c0?.bid,
             source: "label-scan",
-            photoURL: photo
+            photoURL: c0?.photoURL
         )
     }
 
@@ -1386,40 +1425,53 @@ final class WineAPI {
         return decoded
     }
 
-    func adminAddStyle(_ name: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["name": name])
-        let (_, http, _) = try await request(path: "/api/styles", method: "POST", body: body, contentType: "application/json")
-        if http.statusCode >= 400 { throw WineAPIError.server("Style non ajouté") }
-    }
-
-    func adminDeleteStyle(_ name: String) async throws {
-        let enc = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        let (_, http, _) = try await request(path: "/api/styles/\(enc)", method: "DELETE", body: nil)
-        if http.statusCode >= 400 { throw WineAPIError.server("Suppression impossible") }
-    }
-
-    func adminAddHop(_ name: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["name": name])
-        let (_, http, _) = try await request(path: "/api/hops", method: "POST", body: body, contentType: "application/json")
-        if http.statusCode >= 400 { throw WineAPIError.server("Houblon non ajouté") }
-    }
-
-    func adminDeleteHop(_ name: String) async throws {
-        let enc = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        let (_, http, _) = try await request(path: "/api/hops/\(enc)", method: "DELETE", body: nil)
-        if http.statusCode >= 400 { throw WineAPIError.server("Suppression impossible") }
-    }
-
     func adminAddFlavor(_ name: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["name": name])
-        let (_, http, _) = try await request(path: "/api/flavors/custom", method: "POST", body: body, contentType: "application/json")
-        if http.statusCode >= 400 { throw WineAPIError.server("Saveur non ajoutée") }
+        let body = try JSONSerialization.data(withJSONObject: ["name": name, "kind": "arome"])
+        let (_, http, _) = try await request(
+            path: "/api/admin/referentials/flavors",
+            method: "POST",
+            body: body,
+            contentType: "application/json"
+        )
+        if http.statusCode >= 400 { throw WineAPIError.server("Arôme non ajouté") }
     }
 
-    func adminDeleteFlavor(_ name: String) async throws {
-        let enc = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        let (_, http, _) = try await request(path: "/api/flavors/custom/\(enc)", method: "DELETE", body: nil)
+    func adminDeleteFlavor(id: Int) async throws {
+        let (_, http, _) = try await request(
+            path: "/api/admin/referentials/flavors/\(id)",
+            method: "DELETE",
+            body: nil
+        )
         if http.statusCode >= 400 { throw WineAPIError.server("Suppression impossible") }
+    }
+
+    func adminAddRegion(_ name: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["name": name])
+        let (_, http, _) = try await request(
+            path: "/api/admin/referentials/regions",
+            method: "POST",
+            body: body,
+            contentType: "application/json"
+        )
+        if http.statusCode >= 400 { throw WineAPIError.server("Région non ajoutée") }
+    }
+
+    func adminDeleteRegion(id: Int) async throws {
+        let (_, http, _) = try await request(
+            path: "/api/admin/referentials/regions/\(id)",
+            method: "DELETE",
+            body: nil
+        )
+        if http.statusCode >= 400 { throw WineAPIError.server("Suppression impossible") }
+    }
+
+    /// Liste arômes presets + custom (GET /api/config).
+    func configFlavors() async throws -> [String] {
+        let (data, http, _) = try await request(path: "/api/config", method: "GET", body: nil)
+        try throwIfUnauthorized(http.statusCode)
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let arr = root["flavors"] as? [String] else { return [] }
+        return arr
     }
 
     func adminSetPassword(_ username: String, password: String) async throws {
@@ -1433,40 +1485,62 @@ final class WineAPI {
         if http.statusCode >= 400 { throw WineAPIError.server("Mot de passe non mis à jour") }
     }
 
-    func vivinoFetch(bid: Int, barcode: String = "", wineName: String = "", producer: String = "") async throws -> LookupResponse {
-        let payload: [String: Any] = [
-            "vivino_bid": bid,
-            "barcode": barcode,
-            "wine_name": wineName,
-            "producer": producer,
-        ]
-        let json = try JSONSerialization.data(withJSONObject: payload)
-        let (data, http, _) = try await request(
-            path: "/api/vivino/fetch",
-            method: "POST",
-            body: json,
-            contentType: "application/json"
-        )
+    /// GET /api/vivino/{id} — enrichissement (fields + suggested_flavors).
+    func vivinoFetch(
+        bid: Int,
+        barcode: String = "",
+        wineName: String = "",
+        producer: String = "",
+        vintage: Int? = nil
+    ) async throws -> LookupResponse {
+        guard bid > 0 else {
+            return LookupResponse(
+                ok: false, error: "vivino_id invalide", barcode: barcode.ifEmptyNil,
+                wineName: wineName.ifEmptyNil, producer: producer.ifEmptyNil,
+                style: nil, styleFr: nil, abv: nil, summary: nil, vivinoBid: nil,
+                source: nil, photoURL: nil
+            )
+        }
+        var path = "/api/vivino/\(bid)"
+        if let v = vintage, v > 0 { path += "?vintage=\(v)" }
+        let (data, http, _) = try await request(path: path, method: "GET", body: nil)
         try throwIfUnauthorized(http.statusCode)
-        guard let decoded = try? JSONDecoder().decode(LookupResponse.self, from: data) else {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw WineAPIError.decode
         }
-        return decoded
+        let f = root["fields"] as? [String: Any] ?? root
+        let suggested = root["suggested_flavors"] as? [String]
+        return LookupResponse(
+            ok: true,
+            error: nil,
+            barcode: barcode.ifEmptyNil,
+            wineName: (f["wine_name"] as? String) ?? wineName.ifEmptyNil,
+            producer: (f["producer"] as? String) ?? producer.ifEmptyNil,
+            style: f["wine_color"] as? String,
+            styleFr: f["wine_color"] as? String,
+            abv: Self.jsonDouble(f["abv"]),
+            summary: [f["region"] as? String, f["country"] as? String].compactMap { $0 }.joined(separator: " · "),
+            vivinoBid: bid,
+            source: "vivino-enrich",
+            photoURL: f["photo_url"] as? String,
+            vintage: Self.jsonInt(f["vintage"]) ?? vintage,
+            region: f["region"] as? String,
+            country: f["country"] as? String,
+            suggestedFlavors: suggested
+        )
     }
 
     func flavors(style: String, description: String = "") async throws -> FlavorsResponse {
-        var components = URLComponents(url: try url("/api/flavors"), resolvingAgainstBaseURL: true)!
-        components.queryItems = [
-            URLQueryItem(name: "style", value: style),
-            URLQueryItem(name: "description", value: description),
-        ]
-        var req = URLRequest(url: components.url!)
-        let (data, http, _) = try await performTransport(req)
-        try throwIfUnauthorized(http.statusCode)
-        guard let decoded = try? JSONDecoder().decode(FlavorsResponse.self, from: data) else {
-            throw WineAPIError.decode
-        }
-        return decoded
+        // Weeno n'a pas /api/flavors beer — tags depuis /api/config
+        let tags = try await configFlavors()
+        return FlavorsResponse(
+            flavors: tags,
+            suggestedFlavors: [],
+            hops: nil,
+            suggestedHops: nil,
+            showFlavorsBlock: true,
+            showHopsBlock: false
+        )
     }
 
     func createCheckin(
@@ -1483,7 +1557,10 @@ final class WineAPI {
         vivinoBid: String,
         force: Bool,
         photoJPEG: Data? = nil,
-        location: String = ""
+        location: String = "",
+        vintage: Int? = nil,
+        region: String = "",
+        country: String = ""
     ) async throws -> CreateCheckinResult {
         // Weeno: JSON POST /api/checkins + photo optionnelle via /api/photo
         var photoPath: String? = nil
@@ -1511,7 +1588,7 @@ final class WineAPI {
             "wine_color": style.isEmpty ? "autre" : style,
             "rating": rating,
             "flavors": flavors,
-            "comment": String(comment.prefix(300)),
+            "comment": String(comment.prefix(500)),
             "location": loc,
             "barcode": barcode,
             "force": force,
@@ -1519,6 +1596,11 @@ final class WineAPI {
         if let abvD = Double(abv) { payload["abv"] = abvD }
         if let vid = Int(vivinoBid), vid > 0 { payload["vivino_id"] = vid }
         if let photoPath { payload["photo_path"] = photoPath }
+        if let vintage, vintage > 0 { payload["vintage"] = vintage }
+        let reg = region.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !reg.isEmpty { payload["region"] = reg }
+        let ctry = country.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !ctry.isEmpty { payload["country"] = ctry }
         let json = try JSONSerialization.data(withJSONObject: payload)
         let (data, http, _) = try await request(
             path: "/api/checkins",

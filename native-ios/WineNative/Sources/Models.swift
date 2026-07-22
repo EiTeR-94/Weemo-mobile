@@ -60,13 +60,19 @@ struct WineProduct: Codable, Equatable {
     var vivinoBid: Int?
     var source: String?
     var photoURL: String?
+    var vintage: Int?
+    var region: String?
+    var country: String?
+    var grapes: [String]?
+    var suggestedFlavors: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case ok, barcode, producer, style, abv, summary, source
+        case ok, barcode, producer, style, abv, summary, source, vintage, region, country, grapes
         case wineName = "wine_name"
         case styleFr = "wine_color"
         case vivinoBid = "vivino_id"
         case photoURL = "photo_url"
+        case suggestedFlavors = "suggested_flavors"
     }
 
     var displayStyle: String { styleFr ?? style }
@@ -96,16 +102,26 @@ struct LookupResponse: Decodable {
     let vivinoBid: Int?
     let source: String?
     let photoURL: String?
+    let vintage: Int?
+    let region: String?
+    let country: String?
+    let suggestedFlavors: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case ok, error, barcode, producer, style, abv, summary, source
+        case ok, error, barcode, producer, style, abv, summary, source, vintage, region, country
         case wineName = "wine_name"
         case styleFr = "wine_color"
         case vivinoBid = "vivino_id"
         case photoURL = "photo_url"
+        case suggestedFlavors = "suggested_flavors"
     }
 
-    init(ok: Bool, error: String?, barcode: String?, wineName: String?, producer: String?, style: String?, styleFr: String?, abv: Double?, summary: String?, vivinoBid: Int?, source: String?, photoURL: String?) {
+    init(
+        ok: Bool, error: String?, barcode: String?, wineName: String?, producer: String?,
+        style: String?, styleFr: String?, abv: Double?, summary: String?, vivinoBid: Int?,
+        source: String?, photoURL: String?, vintage: Int? = nil, region: String? = nil,
+        country: String? = nil, suggestedFlavors: [String]? = nil
+    ) {
         self.ok = ok
         self.error = error
         self.barcode = barcode
@@ -118,6 +134,10 @@ struct LookupResponse: Decodable {
         self.vivinoBid = vivinoBid
         self.source = source
         self.photoURL = photoURL
+        self.vintage = vintage
+        self.region = region
+        self.country = country
+        self.suggestedFlavors = suggestedFlavors
     }
 
     func asProduct(fallbackBarcode: String) -> WineProduct {
@@ -126,15 +146,23 @@ struct LookupResponse: Decodable {
             barcode: barcode ?? fallbackBarcode,
             wineName: wineName ?? "",
             producer: producer ?? "",
-            style: style ?? "Unknown",
-            styleFr: styleFr,
+            style: style ?? styleFr ?? "autre",
+            styleFr: styleFr ?? style,
             abv: abv,
             summary: summary ?? "",
             vivinoBid: vivinoBid,
             source: source,
-            photoURL: photoURL
+            photoURL: photoURL,
+            vintage: vintage,
+            region: region,
+            country: country,
+            suggestedFlavors: suggestedFlavors
         )
     }
+}
+
+extension String {
+    var ifEmptyNil: String? { isEmpty ? nil : self }
 }
 
 struct CheckinItem: Identifiable, Codable, Hashable {
@@ -461,13 +489,23 @@ struct ReferentialEntry: Codable, Identifiable {
     let name: String
     let preset: Bool?
     let deletable: Bool?
-    var id: String { name }
+    let refId: Int?
+    let kind: String?
+    var id: String { "\(refId.map(String.init) ?? "x")-\(name)" }
+
+    enum CodingKeys: String, CodingKey {
+        case name, preset, deletable, kind
+        case refId = "id"
+    }
 }
 
 struct ReferentialsResponse: Codable {
+    let colors: [ReferentialEntry]?
+    let flavors: [ReferentialEntry]?
+    let regions: [ReferentialEntry]?
+    // legacy beer keys (ignored)
     let styles: [ReferentialEntry]?
     let hops: [ReferentialEntry]?
-    let flavors: [ReferentialEntry]?
 }
 
 struct InviteIpEntry: Codable {
@@ -488,21 +526,81 @@ struct VivinoSearchResponse: Decodable {
     let results: [VivinoHit]?
 }
 
-struct VivinoHit: Decodable, Identifiable {
+struct VivinoHit: Decodable, Identifiable, Hashable {
     let bid: Int
     let wineName: String
     let producer: String?
     let styleFr: String?
     let photoURL: String?
+    let vintage: Int?
+    let country: String?
+    let region: String?
+    let vivinoRating: Double?
+    let vivinoURL: String?
 
-    var id: Int { bid }
+    var id: Int { bid > 0 ? bid : wineName.hashValue }
 
     enum CodingKeys: String, CodingKey {
-        case bid, producer
+        case bid, producer, vintage, country, region
         case wineName = "wine_name"
         case styleFr = "wine_color"
         case photoURL = "photo_url"
+        case vivinoRating = "vivino_rating"
+        case vivinoURL = "vivino_url"
+        case vivinoId = "vivino_id"
+        case id = "id"
     }
+
+    init(bid: Int, wineName: String, producer: String? = nil, styleFr: String? = nil,
+         photoURL: String? = nil, vintage: Int? = nil, country: String? = nil,
+         region: String? = nil, vivinoRating: Double? = nil, vivinoURL: String? = nil) {
+        self.bid = bid
+        self.wineName = wineName
+        self.producer = producer
+        self.styleFr = styleFr
+        self.photoURL = photoURL
+        self.vintage = vintage
+        self.country = country
+        self.region = region
+        self.vivinoRating = vivinoRating
+        self.vivinoURL = vivinoURL
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        wineName = (try? c.decode(String.self, forKey: .wineName)) ?? ""
+        producer = try? c.decode(String.self, forKey: .producer)
+        styleFr = try? c.decode(String.self, forKey: .styleFr)
+        photoURL = try? c.decode(String.self, forKey: .photoURL)
+        country = try? c.decode(String.self, forKey: .country)
+        region = try? c.decode(String.self, forKey: .region)
+        vivinoURL = try? c.decode(String.self, forKey: .vivinoURL)
+        vivinoRating = try? c.decode(Double.self, forKey: .vivinoRating)
+        if let v = try? c.decode(Int.self, forKey: .vintage) { vintage = v }
+        else if let d = try? c.decode(Double.self, forKey: .vintage) { vintage = Int(d) }
+        else { vintage = nil }
+        if let b = try? c.decode(Int.self, forKey: .bid) { bid = b }
+        else if let b = try? c.decode(Int.self, forKey: .vivinoId) { bid = b }
+        else if let b = try? c.decode(Int.self, forKey: .id) { bid = b }
+        else if let d = try? c.decode(Double.self, forKey: .vivinoId) { bid = Int(d) }
+        else { bid = 0 }
+    }
+}
+
+/// Résultat POST /api/label-scan (parité webapp Gemini + candidats Vivino).
+struct LabelScanResult {
+    let ok: Bool
+    let aiAvailable: Bool
+    let aiError: String?
+    let wineName: String?
+    let producer: String?
+    let wineColor: String?
+    let vintage: Int?
+    let abv: Double?
+    let region: String?
+    let candidates: [VivinoHit]
+    let vivinoQuery: String?
+    let labelPhotoPath: String?
 }
 
 struct FlavorsResponse: Decodable {
@@ -519,6 +617,18 @@ struct FlavorsResponse: Decodable {
         case suggestedHops = "suggested_hops"
         case showFlavorsBlock = "show_flavors_block"
         case showHopsBlock = "show_hops_block"
+    }
+
+    init(
+        flavors: [String]?, suggestedFlavors: [String]?, hops: [String]?,
+        suggestedHops: [String]?, showFlavorsBlock: Bool?, showHopsBlock: Bool?
+    ) {
+        self.flavors = flavors
+        self.suggestedFlavors = suggestedFlavors
+        self.hops = hops
+        self.suggestedHops = suggestedHops
+        self.showFlavorsBlock = showFlavorsBlock
+        self.showHopsBlock = showHopsBlock
     }
 }
 

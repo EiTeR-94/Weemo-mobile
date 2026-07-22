@@ -43,7 +43,11 @@ data class WineProduct(
     var summary: String = "",
     @SerializedName("vivino_id") var vivinoId: Int? = null,
     var source: String? = null,
-    @SerializedName("photo_url") var photoURL: String? = null
+    @SerializedName("photo_url") var photoURL: String? = null,
+    var vintage: Int? = null,
+    var region: String? = null,
+    var country: String? = null,
+    var suggestedFlavors: List<String>? = null
 ) {
     val displayStyle: String get() = styleFr ?: style
 
@@ -87,8 +91,8 @@ data class LookupResponse(
         barcode = barcode ?: fallbackBarcode,
         wineName = wineName.orEmpty(),
         producer = producer.orEmpty(),
-        style = style ?: "Unknown",
-        styleFr = styleFr,
+        style = style ?: styleFr ?: "autre",
+        styleFr = styleFr ?: style,
         abv = abv,
         summary = summary.orEmpty(),
         vivinoId = vivinoId,
@@ -178,7 +182,27 @@ data class VivinoHit(
     @SerializedName("wine_name") val wineName: String = "",
     val producer: String? = null,
     @SerializedName("wine_color") val styleFr: String? = null,
-    @SerializedName("photo_url") val photoURL: String? = null
+    @SerializedName("photo_url") val photoURL: String? = null,
+    val vintage: Int? = null,
+    val country: String? = null,
+    val region: String? = null,
+    @SerializedName("vivino_rating") val vivinoRating: Double? = null,
+    @SerializedName("vivino_url") val vivinoURL: String? = null
+)
+
+data class LabelScanResult(
+    val ok: Boolean = true,
+    val aiAvailable: Boolean = false,
+    val aiError: String? = null,
+    val wineName: String? = null,
+    val producer: String? = null,
+    val wineColor: String? = null,
+    val vintage: Int? = null,
+    val abv: Double? = null,
+    val region: String? = null,
+    val candidates: List<VivinoHit> = emptyList(),
+    val vivinoQuery: String? = null,
+    val labelPhotoPath: String? = null
 )
 
 data class FlavorsResponse(

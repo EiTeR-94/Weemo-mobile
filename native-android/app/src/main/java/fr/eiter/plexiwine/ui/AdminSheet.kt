@@ -423,7 +423,7 @@ fun AdminSheet(vm: AppViewModel) {
                     Text("Référentiels", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Styles", "Houblons", "Goûts").forEachIndexed { i, lab ->
+                        listOf("Couleurs", "Arômes", "Régions").forEachIndexed { i, lab ->
                             val on = refTab == i
                             Text(
                                 lab,
@@ -463,9 +463,9 @@ fun AdminSheet(vm: AppViewModel) {
                                 val n = refNew.trim()
                                 withContext(Dispatchers.IO) {
                                     when (refTab) {
-                                        1 -> vm.api.adminAddHop(n)
-                                        2 -> vm.api.adminAddFlavor(n)
-                                        else -> vm.api.adminAddStyle(n)
+                                        1 -> vm.api.adminAddFlavor(n)
+                                        2 -> vm.api.adminAddRegion(n)
+                                        else -> { /* couleurs = presets */ }
                                     }
                                 }
                                 refNew = ""
@@ -476,9 +476,9 @@ fun AdminSheet(vm: AppViewModel) {
                         }
                     }
                     val list = when (refTab) {
-                        1 -> refs.hops.orEmpty()
-                        2 -> refs.flavors.orEmpty()
-                        else -> refs.styles.orEmpty()
+                        1 -> refs.flavors.orEmpty()
+                        2 -> refs.regions.orEmpty()
+                        else -> refs.colors.orEmpty()
                     }.filter {
                         refFilter.isBlank() || it.name.contains(refFilter, ignoreCase = true)
                     }
@@ -501,10 +501,11 @@ fun AdminSheet(vm: AppViewModel) {
                                         scope.launch {
                                             try {
                                                 withContext(Dispatchers.IO) {
+                                                    val id = entry.id ?: return@withContext
                                                     when (refTab) {
-                                                        1 -> vm.api.adminDeleteHop(entry.name)
-                                                        2 -> vm.api.adminDeleteFlavor(entry.name)
-                                                        else -> vm.api.adminDeleteStyle(entry.name)
+                                                        1 -> vm.api.adminDeleteFlavor(id)
+                                                        2 -> vm.api.adminDeleteRegion(id)
+                                                        else -> {}
                                                     }
                                                 }
                                                 reload++

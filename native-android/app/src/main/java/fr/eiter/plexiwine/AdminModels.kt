@@ -78,12 +78,16 @@ data class ReferentialEntry(
     val name: String = "",
     val preset: Boolean? = null,
     val deletable: Boolean? = null,
+    val id: Int? = null,
+    val kind: String? = null,
 )
 
 data class ReferentialsResponse(
+    val colors: List<ReferentialEntry>? = null,
+    val flavors: List<ReferentialEntry>? = null,
+    val regions: List<ReferentialEntry>? = null,
     val styles: List<ReferentialEntry>? = null,
     val hops: List<ReferentialEntry>? = null,
-    val flavors: List<ReferentialEntry>? = null,
 )
 
 data class CleanupPhotosResponse(

@@ -247,13 +247,13 @@ struct AdminSheetView: View {
         WeenoAdminSub(title: "Référentiels")
         WeenoAdminReferentialsCard(
             tab: $refTab,
-            styles: referentials?.styles ?? [],
-            hops: referentials?.hops ?? [],
+            colors: referentials?.colors ?? [],
             flavors: referentials?.flavors ?? [],
+            regions: referentials?.regions ?? [],
             filter: $refFilter,
             newName: $refNewName,
             onAdd: { Task { await addReferential() } },
-            onDelete: { name in Task { await deleteReferential(name) } }
+            onDelete: { entry in Task { await deleteReferential(entry) } }
         )
     }
 
@@ -714,21 +714,22 @@ struct AdminSheetView: View {
         guard name.count >= 2 else { return }
         do {
             switch refTab {
-            case 1: try await app.api.adminAddHop(name)
-            case 2: try await app.api.adminAddFlavor(name)
-            default: try await app.api.adminAddStyle(name)
+            case 1: try await app.api.adminAddFlavor(name)
+            case 2: try await app.api.adminAddRegion(name)
+            default: return // couleurs = presets
             }
             refNewName = ""
             await reload()
         } catch let err { errorMessage = err.localizedDescription }
     }
 
-    private func deleteReferential(_ name: String) async {
+    private func deleteReferential(_ entry: ReferentialEntry) async {
+        guard let rid = entry.refId else { return }
         do {
             switch refTab {
-            case 1: try await app.api.adminDeleteHop(name)
-            case 2: try await app.api.adminDeleteFlavor(name)
-            default: try await app.api.adminDeleteStyle(name)
+            case 1: try await app.api.adminDeleteFlavor(id: rid)
+            case 2: try await app.api.adminDeleteRegion(id: rid)
+            default: return
             }
             await reload()
         } catch let err { errorMessage = err.localizedDescription }

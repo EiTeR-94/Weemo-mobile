@@ -1113,8 +1113,9 @@ private fun WeenoWizard(vm: AppViewModel) {
                 val fh = api.flavors(product!!.displayStyle, product!!.summary)
                 flavorTags = (fh.suggestedFlavors ?: fh.flavors).orEmpty()
                 hopTags = emptyList()
-                showFlavors = fh.showFlavorsBlock != false
-                showHops = false // Weeno = arômes vin, pas houblons bière
+                showFlavors = true
+                showHops = false
+                flavorTags = api.configFlavors()
             } catch (_: Exception) {
                 showHops = false
             }
@@ -1155,28 +1156,34 @@ private fun WeenoWizard(vm: AppViewModel) {
             vm.showToast("Photo prête ✓", ToastPayload.Variant.SUCCESS)
             return@rememberLauncherForActivityResult
         }
-        // Mode scan = photo d'étiquette Weeno (label-scan IA + Vivino)
+        // Mode scan = POST /api/label-scan (Gemini 2 clés + candidats Vivino)
         labelPhotoFile = f
         scope.launch {
             busy = true
-            scanStatus = "Analyse de l’étiquette…"
+            scanStatus = "Analyse en cours… (Gemini)"
             try {
                 val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                val scan = api.scanPhoto(jpeg)
-                if (scan.ok && !scan.wineName.isNullOrBlank()) {
-                    product = scan.asProduct(scan.barcode.orEmpty())
-                    scanStatus = "Vin identifié ✓"
-                    vm.showToast("Vin identifié ✓", ToastPayload.Variant.SUCCESS, label = "Étiquette")
-                } else if (scan.ok) {
-                    if (!scan.wineName.isNullOrBlank()) manualName = scan.wineName!!
-                    if (!scan.producer.isNullOrBlank()) manualProducer = scan.producer!!
-                    val c = scan.styleFr ?: scan.style
-                    if (!c.isNullOrBlank()) manualStyle = c
-                    showManual = true
-                    scanStatus = "Étiquette lue — complète ou cherche sur Vivino"
-                    vm.showToast("Complète le vin", ToastPayload.Variant.INFO)
+                val scan = api.labelScan(jpeg)
+                if (!scan.wineName.isNullOrBlank() || !scan.producer.isNullOrBlank()) {
+                    vivinoQuery = listOfNotNull(scan.producer, scan.wineName).filter { it.isNotBlank() }.joinToString(" ")
+                }
+                if (!scan.producer.isNullOrBlank()) vivinoProducer = scan.producer!!
+                if (scan.vintage != null) {
+                    vivinoVintage = scan.vintage.toString()
+                    manualVintage = scan.vintage.toString()
+                }
+                if (!scan.wineColor.isNullOrBlank()) manualStyle = scan.wineColor!!
+                if (!scan.region.isNullOrBlank()) manualRegion = scan.region!!
+                if (scan.candidates.isNotEmpty()) {
+                    vivinoResults = scan.candidates.take(5)
+                    scanStatus = if (scan.aiAvailable) "Étiquette lue — choisis le bon vin"
+                    else "Scan partiel — suggestions Vivino"
+                    vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
+                } else if (scan.aiAvailable) {
+                    scanStatus = "Étiquette lue — cherche sur Vivino"
                 } else {
-                    scanStatus = scan.error ?: "Étiquette non reconnue"
+                    showManual = true
+                    scanStatus = scan.aiError ?: "Scan indisponible — saisis ou cherche sur Vivino"
                 }
             } catch (e: Exception) {
                 scanStatus = e.message ?: "Erreur scan"
@@ -1339,16 +1346,21 @@ private fun WeenoWizard(vm: AppViewModel) {
                             val f = labelPhotoFile ?: return@WeenoPrimaryButton
                             scope.launch {
                                 busy = true
-                                scanStatus = "Analyse de l’étiquette…"
+                                scanStatus = "Analyse en cours… (Gemini)"
                                 try {
                                     val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                                    val scan = api.scanPhoto(jpeg)
-                                    if (scan.ok && !scan.wineName.isNullOrBlank()) {
-                                        product = scan.asProduct(scan.barcode.orEmpty())
-                                        scanStatus = "Vin identifié ✓"
-                                        vm.showToast("Vin identifié ✓", ToastPayload.Variant.SUCCESS)
+                                    val scan = api.labelScan(jpeg)
+                                    if (!scan.producer.isNullOrBlank()) vivinoProducer = scan.producer!!
+                                    if (!scan.wineName.isNullOrBlank()) {
+                                        vivinoQuery = listOfNotNull(scan.producer, scan.wineName)
+                                            .filter { it.isNotBlank() }.joinToString(" ")
+                                    }
+                                    if (scan.candidates.isNotEmpty()) {
+                                        vivinoResults = scan.candidates.take(5)
+                                        scanStatus = "Étiquette lue — choisis le bon vin"
+                                        vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
                                     } else {
-                                        scanStatus = scan.error ?: "Étiquette non reconnue"
+                                        scanStatus = scan.aiError ?: "Aucun candidat — cherche sur Vivino"
                                     }
                                 } catch (e: Exception) {
                                     scanStatus = e.message ?: "Erreur"
@@ -1407,35 +1419,48 @@ private fun WeenoWizard(vm: AppViewModel) {
                                 .border(1.dp, WineColors.border, RoundedCornerShape(10.dp))
                                 .clickable {
                                     scope.launch {
+                                        // Sélection immédiate (parité webapp) puis enrichissement
+                                        product = WineProduct(
+                                            wineName = hit.wineName,
+                                            producer = hit.producer.orEmpty().ifBlank { "—" },
+                                            style = hit.styleFr ?: "autre",
+                                            styleFr = hit.styleFr,
+                                            vivinoId = hit.bid.takeIf { it > 0 },
+                                            source = "vivino",
+                                            photoURL = hit.photoURL,
+                                            vintage = hit.vintage,
+                                            region = hit.region,
+                                            country = hit.country
+                                        )
+                                        vivinoResults = emptyList()
+                                        scanStatus = "Fiche sélectionnée — enrichissement…"
                                         busy = true
                                         try {
-                                            val fetched = api.vivinoFetch(
-                                                bid = hit.bid,
-                                                wineName = hit.wineName,
-                                                producer = hit.producer.orEmpty()
-                                            )
-                                            product = if (fetched.ok) {
-                                                fetched.asProduct("").let { pr ->
-                                                    if (pr.vivinoId == null) pr.copy(vivinoId = hit.bid) else pr
+                                            if (hit.bid > 0) {
+                                                val fetched = api.vivinoFetch(
+                                                    bid = hit.bid,
+                                                    wineName = hit.wineName,
+                                                    producer = hit.producer.orEmpty(),
+                                                    vintage = hit.vintage
+                                                )
+                                                if (fetched.ok) {
+                                                    val pr = fetched.asProduct("")
+                                                    product = pr.copy(
+                                                        wineName = pr.wineName.ifBlank { hit.wineName },
+                                                        producer = pr.producer.ifBlank { hit.producer.orEmpty() },
+                                                        vivinoId = pr.vivinoId ?: hit.bid,
+                                                        vintage = hit.vintage ?: pr.let { null },
+                                                        region = hit.region,
+                                                        country = hit.country,
+                                                        photoURL = pr.photoURL ?: hit.photoURL
+                                                    )
                                                 }
-                                            } else WineProduct(
-                                                wineName = hit.wineName,
-                                                producer = hit.producer.orEmpty(),
-                                                style = hit.styleFr ?: "autre",
-                                                vivinoId = hit.bid
-                                            )
-                                            scanStatus = "Vivino ✓"
-                                            vivinoResults = emptyList()
+                                            }
+                                            scanStatus = "Vin prêt — continue vers la photo"
                                             vm.showToast("Vin sélectionné ✓", ToastPayload.Variant.SUCCESS)
                                         } catch (e: Exception) {
-                                            product = WineProduct(
-                                                wineName = hit.wineName,
-                                                producer = hit.producer.orEmpty(),
-                                                style = hit.styleFr ?: "autre",
-                                                vivinoId = hit.bid
-                                            )
-                                            scanStatus = "Vivino ✓"
-                                            vivinoResults = emptyList()
+                                            scanStatus = "Base OK — enrichissement indisponible"
+                                            vm.showToast("Vin sélectionné ✓", ToastPayload.Variant.SUCCESS)
                                         } finally {
                                             busy = false
                                         }
@@ -1606,7 +1631,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                     if (flavorTags.isNotEmpty()) {
                         WeenoCard {
                             FlavorTagGrid(
-                                title = if (p != null && p.displayStyle != "Unknown") "Goûts ${p.displayStyle}" else "Goûts",
+                                title = "Arômes & structure",
                                 tags = flavorTags,
                                 selected = flavors,
                                 maxCount = 8
@@ -1616,8 +1641,8 @@ private fun WeenoWizard(vm: AppViewModel) {
                         }
                     }
                     WeenoCard {
-                        Text("Goûts perso", color = WineColors.text, fontWeight = FontWeight.SemiBold)
-                        CustomTagInput("ex. pneus, sucrée…", customFlavor, { customFlavor = it }) {
+                        Text("Arômes perso", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                        CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
                             val t = customFlavor.trim()
                             if (t.isNotBlank() && flavors.size < 8) {
                                 flavors = flavors + t
@@ -1627,7 +1652,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                         if (flavors.isNotEmpty()) {
                             Text("Sélectionnés: ${flavors.joinToString()}", color = WineColors.muted, fontSize = 12.sp)
                         }
-                        Text("Libre — 8 goûts max", color = WineColors.muted, fontSize = 11.sp)
+                        Text("Libre — 8 arômes max", color = WineColors.muted, fontSize = 11.sp)
                     }
                 }
 
@@ -2721,7 +2746,7 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
                 }
             }
             WeenoCard {
-                Text("Goûts perso", color = WineColors.muted)
+                Text("Arômes perso", color = WineColors.muted)
                 CustomTagInput("…", customFlavor, { customFlavor = it }) {
                     val t = customFlavor.trim()
                     if (t.isNotBlank() && flavors.size < 8) {

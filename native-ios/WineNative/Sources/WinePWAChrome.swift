@@ -307,20 +307,20 @@ struct WeenoHistorySearchField: View {
 
 struct WeenoAdminReferentialsCard: View {
     @Binding var tab: Int
-    let styles: [ReferentialEntry]
-    let hops: [ReferentialEntry]
+    let colors: [ReferentialEntry]
     let flavors: [ReferentialEntry]
+    let regions: [ReferentialEntry]
     @Binding var filter: String
     @Binding var newName: String
     let onAdd: () -> Void
-    let onDelete: (String) -> Void
+    let onDelete: (ReferentialEntry) -> Void
 
     private var activeList: [ReferentialEntry] {
         let list: [ReferentialEntry]
         switch tab {
-        case 1: list = hops
-        case 2: list = flavors
-        default: list = styles
+        case 1: list = flavors
+        case 2: list = regions
+        default: list = colors
         }
         guard !filter.isEmpty else { return list }
         let q = WineFormatters.normalizeSearch(filter)
@@ -329,24 +329,27 @@ struct WeenoAdminReferentialsCard: View {
 
     private var addPlaceholder: String {
         switch tab {
-        case 1: return "Nouveau houblon"
-        case 2: return "Nouvelle saveur"
-        default: return "Nouveau style"
+        case 1: return "Nouvel arôme / structure"
+        case 2: return "Nouvelle région"
+        default: return "" // couleurs = presets only
         }
     }
+
+    private var canAdd: Bool { tab == 1 || tab == 2 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                refTabButton("Styles (\(styles.count))", index: 0)
-                refTabButton("Houblons (\(hops.count))", index: 1)
-                refTabButton("Saveurs (\(flavors.count))", index: 2)
+                refTabButton("Couleurs (\(colors.count))", index: 0)
+                refTabButton("Arômes (\(flavors.count))", index: 1)
+                refTabButton("Régions (\(regions.count))", index: 2)
             }
 
-            Text("Tout est supprimable. Les presets (badge gris) reviennent si tu les ré-ajoutes avec +.")
+            Text("Filtre pour naviguer. Badge preset = base — seuls les custom se suppriment.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.muted)
 
+            if canAdd {
             HStack(spacing: 6) {
                 TextField(addPlaceholder, text: $newName)
                     .textInputAutocapitalization(.never)
@@ -365,6 +368,7 @@ struct WeenoAdminReferentialsCard: View {
                     .background(Theme.card)
                     .foregroundStyle(Theme.text)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border))
+            }
             }
 
             TextField("Filtrer…", text: $filter)
@@ -403,9 +407,11 @@ struct WeenoAdminReferentialsCard: View {
                                         .overlay(Capsule().stroke(Theme.border))
                                 }
                                 Spacer(minLength: 4)
-                                Button("Suppr") { onDelete(entry.name) }
+                                if entry.preset != true, entry.refId != nil {
+                                Button("Suppr") { onDelete(entry) }
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(Theme.error)
+                                }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
