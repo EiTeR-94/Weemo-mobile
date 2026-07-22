@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,7 +53,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -467,7 +464,20 @@ fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier, showNumber: B
     }
 }
 
-/** Menu multi-sélection tags — dialog compact téléphone (pas de chips). */
+/** Aligné sur wine/app/flavors.py STRUCTURE_TAGS. */
+private val STRUCTURE_TAGS: Set<String> = setOf(
+    "tanins souples", "tanins fermes", "acide vif", "acide ronde",
+    "corps léger", "corps moyen", "corps ample",
+    "finale courte", "finale longue",
+    "sec", "demi-sec", "moelleux",
+    "frais", "chaleureux", "élégant", "puissant", "équilibé", "équilibré", "complexe",
+)
+
+/**
+ * Multi-sélection arômes/structure — chips + recherche (plus de menu de 300 lignes).
+ * @param suggested tags Vivino déjà proposés (style or)
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WeenoTagDropdownField(
     label: String,
@@ -475,24 +485,87 @@ fun WeenoTagDropdownField(
     selected: Set<String>,
     maxCount: Int = 8,
     modifier: Modifier = Modifier,
+    suggested: Set<String> = emptySet(),
     onToggle: (String) -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
+    var browseOpen by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf("") }
-    val filtered = remember(tags, filter) {
+    var section by remember { mutableStateOf(0) } // 0 tous, 1 arômes, 2 structure
+
+    val filtered = remember(tags, filter, section) {
         val q = filter.trim().lowercase()
-        if (q.isEmpty()) tags else tags.filter { it.lowercase().contains(q) }
-    }
-    val summary = when {
-        selected.isEmpty() -> "Ajouter un tag prédéfini…"
-        selected.size <= 2 -> selected.sorted().joinToString(", ")
-        else -> "${selected.size} tags sélectionnés"
-    }
-    Column(modifier = modifier.fillMaxWidth()) {
-        if (label.isNotBlank()) {
-            Text(label, color = WineColors.muted, fontSize = 12.sp)
-            Spacer(Modifier.height(3.dp))
+        tags.filter { tag ->
+            val isStruct = tag in STRUCTURE_TAGS || tag.lowercase() in STRUCTURE_TAGS
+            when (section) {
+                1 -> if (isStruct) return@filter false
+                2 -> if (!isStruct) return@filter false
+            }
+            q.isEmpty() || tag.lowercase().contains(q)
         }
+    }
+    val pendingSuggestions = remember(suggested, selected) {
+        suggested.filter { it !in selected }.sorted()
+    }
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (label.isNotBlank()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = WineColors.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text("${selected.size}/$maxCount", color = WineColors.muted, fontSize = 11.sp)
+            }
+        }
+
+        if (selected.isEmpty()) {
+            Text(
+                "Aucun tag — suggestions Vivino ou parcourir ci-dessous",
+                color = WineColors.muted,
+                fontSize = 12.sp
+            )
+        } else {
+            FlowRowWrap {
+                selected.sorted().forEach { tag ->
+                    val isSug = tag in suggested
+                    val bg = if (isSug) WineColors.star.copy(alpha = 0.18f) else WineColors.accent.copy(alpha = 0.2f)
+                    val fg = if (isSug) WineColors.star else WineColors.accent
+                    val border = if (isSug) WineColors.star.copy(alpha = 0.65f) else WineColors.accent.copy(alpha = 0.65f)
+                    Text(
+                        "$tag ×",
+                        color = fg,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(bg)
+                            .border(0.5.dp, border, RoundedCornerShape(999.dp))
+                            .clickable { onToggle(tag) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
+        if (pendingSuggestions.isNotEmpty()) {
+            Text("Suggestions Vivino", color = WineColors.star, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            FlowRowWrap {
+                pendingSuggestions.forEach { tag ->
+                    Text(
+                        "+ $tag",
+                        color = WineColors.star,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(WineColors.star.copy(alpha = 0.1f))
+                            .border(0.5.dp, WineColors.star.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                            .clickable {
+                                if (selected.size < maxCount) onToggle(tag)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
         Row(
             Modifier
                 .fillMaxWidth()
@@ -500,143 +573,121 @@ fun WeenoTagDropdownField(
                 .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
                 .background(WineColors.fieldBg)
                 .clickable {
-                    filter = ""
-                    open = true
+                    browseOpen = !browseOpen
+                    if (!browseOpen) {
+                        filter = ""
+                        section = 0
+                    }
                 }
-                .padding(horizontal = 10.dp, vertical = 9.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                summary,
-                color = if (selected.isEmpty()) WineColors.muted else WineColors.text,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                if (browseOpen) "▲ Masquer le catalogue" else "🔍 Parcourir arômes & structure…",
+                color = WineColors.text,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
-            Text("▾", color = WineColors.muted, fontSize = 11.sp)
+            Text("${tags.size}", color = WineColors.muted, fontSize = 11.sp)
         }
-        if (selected.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
-            selected.sorted().forEach { tag ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 1.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        tag,
-                        color = WineColors.accent,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        "×",
-                        color = WineColors.muted,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { onToggle(tag) }
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-    }
-    if (open) {
-        Dialog(onDismissRequest = { open = false }) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = WineColors.card,
-                // Compact téléphone : ~40% écran max, marges latérales
-                modifier = Modifier
-                    .fillMaxWidth(0.94f)
-                    .heightIn(max = 340.dp)
+
+        if (browseOpen) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
+                    .background(WineColors.bg.copy(alpha = 0.55f))
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Tous", "Arômes", "Structure").forEachIndexed { i, lab ->
+                        val on = section == i
                         Text(
-                            "Tags",
-                            color = WineColors.text,
+                            lab,
+                            color = if (on) WineColors.accent else WineColors.muted,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            "${selected.size}/$maxCount",
-                            color = WineColors.muted,
-                            fontSize = 11.sp
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (on) WineColors.accent.copy(alpha = 0.22f) else WineColors.bg)
+                                .border(
+                                    0.5.dp,
+                                    if (on) WineColors.accent.copy(alpha = 0.7f) else WineColors.border,
+                                    RoundedCornerShape(999.dp)
+                                )
+                                .clickable { section = i }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = filter,
-                        onValueChange = { filter = it },
-                        placeholder = { Text("Filtrer…", color = WineColors.muted, fontSize = 13.sp) },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 48.dp),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = WineColors.text,
-                            unfocusedTextColor = WineColors.text,
-                            focusedBorderColor = WineColors.accent,
-                            unfocusedBorderColor = WineColors.border,
-                            cursorColor = WineColors.accent,
-                            focusedContainerColor = WineColors.fieldBg,
-                            unfocusedContainerColor = WineColors.fieldBg
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f, fill = false)
-                            .heightIn(max = 200.dp)
-                    ) {
-                        items(filtered, key = { it }) { tag ->
+                }
+                OutlinedTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    placeholder = { Text("Rechercher un tag…", color = WineColors.muted, fontSize = 13.sp) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = WineColors.text,
+                        unfocusedTextColor = WineColors.text,
+                        focusedBorderColor = WineColors.accent,
+                        unfocusedBorderColor = WineColors.border,
+                        cursorColor = WineColors.accent,
+                        focusedContainerColor = WineColors.bg,
+                        unfocusedContainerColor = WineColors.bg
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                Text(
+                    if (filtered.isEmpty()) "Aucun résultat" else "${filtered.size} tag${if (filtered.size > 1) "s" else ""}",
+                    color = WineColors.muted,
+                    fontSize = 11.sp
+                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    FlowRowWrap {
+                        filtered.forEach { tag ->
                             val on = tag in selected
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
+                            val isSug = tag in suggested
+                            val bg = when {
+                                on && isSug -> WineColors.star.copy(alpha = 0.18f)
+                                on -> WineColors.accent.copy(alpha = 0.2f)
+                                else -> WineColors.bg
+                            }
+                            val fg = when {
+                                on && isSug -> WineColors.star
+                                on -> WineColors.accent
+                                else -> WineColors.text
+                            }
+                            val border = when {
+                                on && isSug -> WineColors.star.copy(alpha = 0.7f)
+                                on -> WineColors.accent.copy(alpha = 0.65f)
+                                else -> WineColors.border
+                            }
+                            Text(
+                                tag,
+                                color = fg,
+                                fontSize = 12.sp,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(bg)
+                                    .border(0.5.dp, border, RoundedCornerShape(999.dp))
                                     .clickable {
                                         if (on || selected.size < maxCount) onToggle(tag)
                                     }
-                                    .padding(vertical = 8.dp, horizontal = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    tag,
-                                    color = if (on) WineColors.accent else WineColors.text,
-                                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    if (on) "✓" else "○",
-                                    color = if (on) WineColors.accent else WineColors.muted,
-                                    fontSize = 14.sp
-                                )
-                            }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
                         }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    TextButton(
-                        onClick = { open = false },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("OK", color = WineColors.accent, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     }
                 }
             }

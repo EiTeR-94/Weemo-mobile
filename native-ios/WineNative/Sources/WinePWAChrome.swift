@@ -159,7 +159,7 @@ struct WeenoFormSelectField: View {
     }
 }
 
-/// Menu multi-sélection tags prédéfinis — sheet compact téléphone (pas chips).
+/// Multi-sélection arômes/structure — chips + recherche (plus de menu de 300 lignes).
 struct WeenoTagDropdownField: View {
     let label: String
     let tags: [String]
@@ -167,163 +167,245 @@ struct WeenoTagDropdownField: View {
     var maxCount: Int = 8
     var suggested: Set<String> = []
 
-    @State private var open = false
+    @State private var browseOpen = false
     @State private var filter = ""
-    /// Hauteur réduite par défaut (téléphone) ; on peut tirer un peu plus.
-    @State private var sheetDetent: PresentationDetent = .height(280)
+    @State private var section: Section = .all
+
+    private enum Section: String, CaseIterable {
+        case all = "Tous"
+        case aroma = "Arômes"
+        case structure = "Structure"
+    }
+
+    /// Aligné sur `wine/app/flavors.py` STRUCTURE_TAGS.
+    private static let structureTags: Set<String> = [
+        "tanins souples", "tanins fermes", "acide vif", "acide ronde",
+        "corps léger", "corps moyen", "corps ample",
+        "finale courte", "finale longue",
+        "sec", "demi-sec", "moelleux",
+        "frais", "chaleureux", "élégant", "puissant", "équilibé", "équilibré", "complexe",
+    ]
 
     private var filtered: [String] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if q.isEmpty { return tags }
-        return tags.filter { $0.lowercased().contains(q) }
+        return tags.filter { tag in
+            let isStruct = Self.structureTags.contains(tag) || Self.structureTags.contains(tag.lowercased())
+            switch section {
+            case .all: break
+            case .aroma: if isStruct { return false }
+            case .structure: if !isStruct { return false }
+            }
+            if q.isEmpty { return true }
+            return tag.lowercased().contains(q)
+        }
     }
 
-    private var summary: String {
-        if selected.isEmpty { return "Ajouter un tag prédéfini…" }
-        let list = Array(selected).sorted()
-        if list.count <= 2 { return list.joined(separator: ", ") }
-        return "\(list.count) tags sélectionnés"
+    private var pendingSuggestions: [String] {
+        suggested.filter { !selected.contains($0) }.sorted()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             if !label.isEmpty {
-                Text(label)
-                    .font(.system(size: Theme.Font.field))
-                    .foregroundStyle(Theme.muted)
-            }
-            Button {
-                filter = ""
-                sheetDetent = .height(280)
-                open = true
-            } label: {
-                HStack(spacing: 8) {
-                    Text(summary)
-                        .lineLimit(1)
-                        .foregroundStyle(selected.isEmpty ? Theme.muted : Theme.text)
+                HStack {
+                    Text(label)
+                        .font(.system(size: Theme.Font.field))
+                        .foregroundStyle(Theme.muted)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                    Text("\(selected.count)/\(maxCount)")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }
-                .font(.system(size: 14))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
+            }
+
+            // Sélection : chips compactes (pas une liste verticale)
+            if selected.isEmpty {
+                Text("Aucun tag — suggestions Vivino ou parcourir ci-dessous")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .padding(.vertical, 2)
+            } else {
+                FlowLayout(spacing: 6) {
+                    ForEach(Array(selected).sorted(), id: \.self) { tag in
+                        let isSug = suggested.contains(tag)
+                        Button {
+                            selected.remove(tag)
+                        } label: {
+                            Text("\(tag) ×")
+                                .font(.system(size: 12, weight: .semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(isSug ? Theme.star.opacity(0.18) : Theme.accent.opacity(0.2))
+                                .foregroundStyle(isSug ? Theme.star : Theme.accent)
+                                .overlay(
+                                    Capsule().stroke(
+                                        isSug ? Theme.star.opacity(0.65) : Theme.accent.opacity(0.65),
+                                        lineWidth: 0.5
+                                    )
+                                )
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Suggestions Vivino encore non choisies
+            if !pendingSuggestions.isEmpty {
+                Text("Suggestions Vivino")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.star)
+                FlowLayout(spacing: 6) {
+                    ForEach(pendingSuggestions, id: \.self) { tag in
+                        Button {
+                            toggle(tag)
+                        } label: {
+                            Text("+ \(tag)")
+                                .font(.system(size: 12, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Theme.star.opacity(0.1))
+                                .foregroundStyle(Theme.star)
+                                .overlay(Capsule().stroke(Theme.star.opacity(0.45), lineWidth: 0.5))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    browseOpen.toggle()
+                    if !browseOpen { filter = ""; section = .all }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: browseOpen ? "chevron.up" : "magnifyingglass")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(browseOpen ? "Masquer le catalogue" : "Parcourir arômes & structure…")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 0)
+                    Text("\(tags.count)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.fieldBg)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-            if !selected.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(selected).sorted(), id: \.self) { tag in
-                        HStack(spacing: 6) {
-                            Text(tag)
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.accent)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                            Button("×") {
-                                selected.remove(tag)
+
+            if browseOpen {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Segments section
+                    HStack(spacing: 6) {
+                        ForEach(Section.allCases, id: \.self) { s in
+                            let on = section == s
+                            Button {
+                                section = s
+                            } label: {
+                                Text(s.rawValue)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(on ? Theme.accent.opacity(0.22) : Theme.bg)
+                                    .foregroundStyle(on ? Theme.accent : Theme.muted)
+                                    .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.7) : Theme.border, lineWidth: 0.5))
+                                    .clipShape(Capsule())
                             }
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.muted)
                             .buttonStyle(.plain)
                         }
+                        Spacer(minLength: 0)
                     }
-                }
-                .padding(.top, 2)
-            }
-        }
-        .sheet(isPresented: $open) {
-            NavigationStack {
-                VStack(spacing: 0) {
+
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.muted)
-                        TextField("Filtrer…", text: $filter)
+                        TextField("Rechercher un tag…", text: $filter)
                             .font(.system(size: 14))
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .foregroundStyle(Theme.text)
+                        if !filter.isEmpty {
+                            Button {
+                                filter = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
-                    .background(Theme.fieldBg)
+                    .background(Theme.bg)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 0.5))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
 
-                    Text("\(selected.count)/\(maxCount) sélectionnés")
+                    Text(filtered.isEmpty ? "Aucun résultat" : "\(filtered.count) tag\(filtered.count > 1 ? "s" : "")")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 2)
 
-                    List {
-                        ForEach(filtered, id: \.self) { tag in
-                            let on = selected.contains(tag)
-                            let isSug = suggested.contains(tag)
-                            Button {
-                                if on {
-                                    selected.remove(tag)
-                                } else if selected.count < maxCount {
-                                    selected.insert(tag)
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
+                    ScrollView {
+                        FlowLayout(spacing: 6) {
+                            ForEach(filtered, id: \.self) { tag in
+                                let on = selected.contains(tag)
+                                let isSug = suggested.contains(tag)
+                                Button {
+                                    toggle(tag)
+                                } label: {
                                     Text(tag)
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Theme.text)
-                                        .lineLimit(1)
-                                    if isSug {
-                                        Text("Vivino")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(Theme.star)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 1)
-                                            .overlay(Capsule().stroke(Theme.star.opacity(0.5), lineWidth: 0.5))
-                                    }
-                                    Spacer(minLength: 0)
-                                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(on ? Theme.accent : Theme.muted)
+                                        .font(.system(size: 12, weight: on ? .semibold : .regular))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            on
+                                                ? (isSug ? Theme.star.opacity(0.18) : Theme.accent.opacity(0.2))
+                                                : Theme.bg
+                                        )
+                                        .foregroundStyle(
+                                            on
+                                                ? (isSug ? Theme.star : Theme.accent)
+                                                : Theme.text
+                                        )
+                                        .overlay(
+                                            Capsule().stroke(
+                                                on
+                                                    ? (isSug ? Theme.star.opacity(0.7) : Theme.accent.opacity(0.65))
+                                                    : Theme.border,
+                                                lineWidth: 0.5
+                                            )
+                                        )
+                                        .clipShape(Capsule())
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
-                            .listRowBackground(Theme.card)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 4)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .environment(\.defaultMinListRowHeight, 36)
+                    .frame(maxHeight: 220)
                 }
-                .background(Theme.bg)
-                .navigationTitle("Tags")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("OK") { open = false }
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-                .preferredColorScheme(.dark)
+                .padding(10)
+                .background(Theme.bg.opacity(0.55))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            // Téléphone : demi-écran compact par défaut (pas full-screen)
-            // Note: pas de presentationContentInteraction — API iOS 16.4+ alors que
-            // deployment target = 16.0 (CI xcodebuild échoue sinon).
-            .presentationDetents([.height(280), .height(380), .fraction(0.55)], selection: $sheetDetent)
-            .presentationDragIndicator(.visible)
-            .onAppear {
-                filter = ""
-                sheetDetent = .height(280)
-            }
+        }
+    }
+
+    private func toggle(_ tag: String) {
+        if selected.contains(tag) {
+            selected.remove(tag)
+        } else if selected.count < maxCount {
+            selected.insert(tag)
         }
     }
 }

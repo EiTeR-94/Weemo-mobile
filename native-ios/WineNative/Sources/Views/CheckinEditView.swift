@@ -12,11 +12,8 @@ struct CheckinEditView: View {
     @State private var comment: String
     @State private var location: String
     @State private var flavors = Set<String>()
-    @State private var hops = Set<String>()
     @State private var flavorTags: [String] = []
-    @State private var hopTags: [String] = []
     @State private var customFlavorInput = ""
-    @State private var customHopInput = ""
     @State private var hidden = false
     @State private var photoItem: PhotosPickerItem?
     @State private var newPhoto: Data?
@@ -31,7 +28,6 @@ struct CheckinEditView: View {
         _comment = State(initialValue: item.comment ?? "")
         _location = State(initialValue: item.location ?? "")
         _flavors = State(initialValue: Set(item.flavors ?? []))
-        _hops = State(initialValue: Set(item.hops ?? []))
         _hidden = State(initialValue: item.hiddenFromPartner == true)
     }
 
@@ -67,44 +63,23 @@ struct CheckinEditView: View {
 
                 VivinoRatingSlider(rating: $rating)
 
-                if !flavorTags.isEmpty {
-                    WeenoTagDropdownField(
-                        label: "Goûts / tags",
-                        tags: flavorTags,
-                        selected: $flavors,
-                        maxCount: 8
-                    )
-                }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Goûts perso")
-                        .font(.system(size: Theme.Font.tagTitle))
-                        .foregroundStyle(Theme.muted)
+                    Text("Arômes & structure")
+                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    if !flavorTags.isEmpty {
+                        WeenoTagDropdownField(
+                            label: "",
+                            tags: flavorTags,
+                            selected: $flavors,
+                            maxCount: 8
+                        )
+                    }
                     CustomTagInput(
-                        placeholder: "ex. pneus, sucrée…",
+                        placeholder: "ex. pierre chaude, salin…",
                         input: $customFlavorInput,
                         selected: $flavors,
                         maxCount: 8
-                    )
-                }
-
-                if !hopTags.isEmpty {
-                    WeenoTagDropdownField(
-                        label: "Houblons",
-                        tags: hopTags,
-                        selected: $hops,
-                        maxCount: 6
-                    )
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Houblons perso")
-                        .font(.system(size: Theme.Font.tagTitle))
-                        .foregroundStyle(Theme.muted)
-                    CustomTagInput(
-                        placeholder: "ex. Citra, Mosaic…",
-                        input: $customHopInput,
-                        selected: $hops,
-                        maxCount: 6,
-                        onRegister: { name in Task { try? await app.api.addHop(name) } }
                     )
                 }
 
@@ -140,7 +115,8 @@ struct CheckinEditView: View {
     private func loadTags() async {
         if let n = try? await app.api.flavors(style: item.style ?? "Unknown", description: "") {
             flavorTags = n.flavors ?? []
-            hopTags = n.hops ?? []
+        } else if let tags = try? await app.api.configFlavors() {
+            flavorTags = tags
         }
     }
 
@@ -161,7 +137,7 @@ struct CheckinEditView: View {
                 id: item.id,
                 rating: rating,
                 flavors: Array(flavors),
-                hops: Array(hops),
+                hops: [],
                 comment: String(comment.prefix(120)),
                 hiddenFromPartner: app.isAdmin ? hidden : nil,
                 location: String(location.prefix(300))

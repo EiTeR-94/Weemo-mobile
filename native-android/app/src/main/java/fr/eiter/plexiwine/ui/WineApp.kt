@@ -1129,14 +1129,13 @@ private fun WeenoWizard(vm: AppViewModel) {
     LaunchedEffect(vm.wizardStep, product) {
         if (vm.wizardStep == 3 && product != null) {
             try {
-                val fh = api.flavors(product!!.displayStyle, product!!.summary)
-                flavorTags = (fh.suggestedFlavors ?: fh.flavors).orEmpty()
                 hopTags = emptyList()
                 showFlavors = true
                 showHops = false
                 flavorTags = api.configFlavors()
             } catch (_: Exception) {
                 showHops = false
+                flavorTags = emptyList()
             }
         }
     }
@@ -1667,14 +1666,15 @@ private fun WeenoWizard(vm: AppViewModel) {
 
                 WeenoCard {
                     Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
-                    Text("Menu déroulant pour les tags prédéfinis. Ajoute les tiens en bas.", color = WineColors.muted, fontSize = 11.sp)
+                    Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.", color = WineColors.muted, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp))
                     if (flavorTags.isNotEmpty()) {
                         WeenoTagDropdownField(
-                            label = "Tags prédéfinis",
+                            label = "",
                             tags = flavorTags,
                             selected = flavors,
-                            maxCount = 8
+                            maxCount = 8,
+                            suggested = product?.suggestedFlavors?.toSet().orEmpty()
                         ) { tag ->
                             flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
                         }
@@ -2809,47 +2809,25 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
             WeenoCard {
                 VivinoRatingSlider(rating, { rating = it }, onTick = { vm.hapticTick() })
             }
-            if (flavorTags.isNotEmpty()) {
-                WeenoCard {
+            WeenoCard {
+                Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                if (flavorTags.isNotEmpty()) {
                     WeenoTagDropdownField(
-                        label = "Goûts / tags",
+                        label = "",
                         tags = flavorTags,
                         selected = flavors,
                         maxCount = 8
                     ) { tag ->
                         flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
-            }
-            WeenoCard {
-                Text("Arômes perso", color = WineColors.muted)
-                CustomTagInput("…", customFlavor, { customFlavor = it }) {
+                CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
                     val t = customFlavor.trim()
                     if (t.isNotBlank() && flavors.size < 8) {
                         flavors = flavors + t
                         customFlavor = ""
-                    }
-                }
-            }
-            if (hopTags.isNotEmpty()) {
-                WeenoCard {
-                    WeenoTagDropdownField(
-                        label = "Houblons",
-                        tags = hopTags,
-                        selected = hops,
-                        maxCount = 6
-                    ) { tag ->
-                        hops = if (tag in hops) hops - tag else if (hops.size < 6) hops + tag else hops
-                    }
-                }
-            }
-            WeenoCard {
-                Text("Houblons perso", color = WineColors.muted)
-                CustomTagInput("…", customHop, { customHop = it }) {
-                    val t = customHop.trim()
-                    if (t.isNotBlank() && hops.size < 6) {
-                        hops = hops + t
-                        customHop = ""
                     }
                 }
             }

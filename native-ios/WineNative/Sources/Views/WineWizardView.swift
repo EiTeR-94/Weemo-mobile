@@ -349,12 +349,12 @@ struct WineWizardView: View {
                 Text("Arômes & structure")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Menu déroulant pour parcourir les tags. Ajoute les tiens en bas.")
+                Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.")
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
                 if !flavorTags.isEmpty {
                     WeenoTagDropdownField(
-                        label: "Tags prédéfinis",
+                        label: "",
                         tags: flavorTags,
                         selected: $flavors,
                         maxCount: 8,
