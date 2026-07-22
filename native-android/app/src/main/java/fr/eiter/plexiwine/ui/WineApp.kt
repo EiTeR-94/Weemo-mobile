@@ -1311,17 +1311,6 @@ private fun WeenoWizard(vm: AppViewModel) {
     }
 
     val wizardScroll = rememberScrollState()
-    val vivinoBringIntoView = remember { BringIntoViewRequester() }
-
-    // Quand des suggestions Vivino arrivent / clavier ouvert → ramener la zone résultats au-dessus de l’IME
-    LaunchedEffect(vivinoResults, vm.wizardStep) {
-        if (vm.wizardStep == 1 && vivinoResults.isNotEmpty()) {
-            kotlinx.coroutines.delay(80)
-            try {
-                vivinoBringIntoView.bringIntoView()
-            } catch (_: Exception) { /* ignore */ }
-        }
-    }
 
     Column(
         Modifier
@@ -1409,7 +1398,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                 WeenoCard {
                     Text("Chercher sur Vivino", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Tape — suggestions en direct (max 5). Le clavier ne les cache plus.",
+                        "Tape — suggestions en direct (max 5). Scrolle la liste si besoin.",
                         color = WineColors.muted,
                         fontSize = 12.sp
                     )
@@ -1425,10 +1414,12 @@ private fun WeenoWizard(vm: AppViewModel) {
                         }
                     }
                     vivinoError?.let { Text(it, color = WineColors.error, fontSize = 12.sp) }
+                    // Liste locale (pas de re-bringIntoView à chaque frappe)
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .bringIntoViewRequester(vivinoBringIntoView)
+                            .heightIn(max = if (vivinoResults.isEmpty()) 0.dp else 220.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
                     vivinoResults.forEachIndexed { idx, hit ->
                         Row(

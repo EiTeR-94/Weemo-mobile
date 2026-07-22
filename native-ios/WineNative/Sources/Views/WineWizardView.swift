@@ -93,34 +93,15 @@ struct WineWizardView: View {
             .background(Theme.bg)
             .scrollDismissesKeyboard(.interactively)
             .dismissKeyboardOnTap()
-            .onChange(of: vivinoResults.count) { _ in
-                guard step == 1, !vivinoResults.isEmpty else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    withAnimation(.easeOut(duration: 0.28)) {
-                        proxy.scrollTo("vivino-results-end", anchor: .bottom)
-                    }
-                }
-            }
-            .onChange(of: keyboardHeight) { h in
-                guard step == 1, h > 0 else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        if !vivinoResults.isEmpty {
-                            proxy.scrollTo("vivino-results-end", anchor: .bottom)
-                        } else {
-                            proxy.scrollTo("vivino-search", anchor: .top)
-                        }
-                    }
-                }
-            }
+            // Un seul pin au focus recherche (pas de re-scroll à chaque suggestion / frappe)
             .onChange(of: vivinoQueryFocused) { on in
-                if on { scrollVivinoSearch(proxy) }
+                if on { pinVivinoSearchOnce(proxy) }
             }
             .onChange(of: vivinoProducerFocused) { on in
-                if on { scrollVivinoSearch(proxy) }
+                if on { pinVivinoSearchOnce(proxy) }
             }
             .onChange(of: vivinoVintageFocused) { on in
-                if on { scrollVivinoSearch(proxy) }
+                if on { pinVivinoSearchOnce(proxy) }
             }
         }
         .fullScreenCover(isPresented: $showScanCamera) {
@@ -175,15 +156,12 @@ struct WineWizardView: View {
         keyboardHeight = overlap
     }
 
-    private func scrollVivinoSearch(_ proxy: ScrollViewProxy) {
+    private func pinVivinoSearchOnce(_ proxy: ScrollViewProxy) {
         guard step == 1 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            withAnimation(.easeOut(duration: 0.25)) {
-                if !vivinoResults.isEmpty {
-                    proxy.scrollTo("vivino-results-end", anchor: .bottom)
-                } else {
-                    proxy.scrollTo("vivino-search", anchor: .top)
-                }
+        // Après ouverture clavier : un seul recentrage sur le champ, pas sur les résultats
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo("vivino-search", anchor: .top)
             }
         }
     }
@@ -246,7 +224,7 @@ struct WineWizardView: View {
                 Text("Chercher sur Vivino")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Tape — suggestions en direct (max 5). Le clavier ne les cache plus.")
+                Text("Tape — suggestions en direct (max 5). Scrolle la liste si besoin.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                 WeenoField(
@@ -278,56 +256,58 @@ struct WineWizardView: View {
                 if let vivinoError {
                     Text(vivinoError).font(.caption).foregroundStyle(Theme.muted)
                 }
-                // Zone résultats : reste au-dessus du clavier via scroll + padding
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(vivinoResults.enumerated()), id: \.element.id) { idx, hit in
-                        Button {
-                            vivinoQueryFocused = false
-                            vivinoProducerFocused = false
-                            vivinoVintageFocused = false
-                            Task { await selectVivino(hit) }
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text("\(idx + 1)")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(idx == 0 ? Theme.btnPrimaryText : Theme.muted)
-                                    .frame(width: 20, height: 20)
-                                    .background(idx == 0 ? Theme.accent : Theme.bg)
-                                    .clipShape(Circle())
-                                if let urlStr = hit.photoURL, let url = URL(string: urlStr) {
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case .success(let image):
-                                            image.resizable().aspectRatio(contentMode: .fill)
-                                        default:
-                                            RoundedRectangle(cornerRadius: 6).fill(Theme.card).overlay(Text("🍷").font(.caption2))
+                // Liste locale (scroll interne) — ne recentre pas la page à chaque frappe
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(vivinoResults.enumerated()), id: \.element.id) { idx, hit in
+                            Button {
+                                vivinoQueryFocused = false
+                                vivinoProducerFocused = false
+                                vivinoVintageFocused = false
+                                Task { await selectVivino(hit) }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Text("\(idx + 1)")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(idx == 0 ? Theme.btnPrimaryText : Theme.muted)
+                                        .frame(width: 20, height: 20)
+                                        .background(idx == 0 ? Theme.accent : Theme.bg)
+                                        .clipShape(Circle())
+                                    if let urlStr = hit.photoURL, let url = URL(string: urlStr) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image.resizable().aspectRatio(contentMode: .fill)
+                                            default:
+                                                RoundedRectangle(cornerRadius: 6).fill(Theme.card).overlay(Text("🍷").font(.caption2))
+                                            }
                                         }
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
                                     }
-                                    .frame(width: 40, height: 40)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(hit.wineName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(2)
+                                        Text([hit.producer, hit.country, hit.vintage.map(String.init)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                                            .font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
+                                    }
+                                    Spacer(minLength: 0)
+                                    if let r = hit.vivinoRating {
+                                        Text(String(format: "%.1f", r))
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(Theme.star)
+                                    }
                                 }
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(hit.wineName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(2)
-                                    Text([hit.producer, hit.country, hit.vintage.map(String.init)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
-                                }
-                                Spacer(minLength: 0)
-                                if let r = hit.vivinoRating {
-                                    Text(String(format: "%.1f", r))
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(Theme.star)
-                                }
+                                .padding(8)
+                                .background(idx == 0 ? Theme.accent.opacity(0.08) : Theme.bg)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
-                            .padding(8)
-                            .background(idx == 0 ? Theme.accent.opacity(0.08) : Theme.bg)
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 0.5))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
+                .frame(maxHeight: vivinoResults.isEmpty ? 0 : 220)
                 .id("vivino-results")
-                Color.clear.frame(height: 1).id("vivino-results-end")
 
                 DisclosureGroup("Saisie manuelle (secours)", isExpanded: $showManual) {
                     WeenoField(label: "Nom / cuvée *", text: $manualName, placeholder: "ex. Saint-Aubin 1er Cru…")
