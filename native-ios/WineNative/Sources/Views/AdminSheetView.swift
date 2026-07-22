@@ -92,7 +92,7 @@ struct AdminSheetView: View {
                 .environmentObject(app)
         }
         .fullScreenCover(isPresented: $showRpgAdmin) {
-            Weeno QuestAdminSheetView()
+            WeenoQuestAdminSheetView()
                 .environmentObject(app)
         }
         .alert(

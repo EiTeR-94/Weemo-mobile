@@ -150,7 +150,7 @@ struct MainView: View {
                 GrimoireSheetView()
                     .environmentObject(app)
             case .rpgAdmin:
-                Weeno QuestAdminSheetView()
+                WeenoQuestAdminSheetView()
                     .environmentObject(app)
             }
         }
