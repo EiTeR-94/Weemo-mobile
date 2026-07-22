@@ -363,8 +363,8 @@ fun GrimoireSheet(vm: AppViewModel) {
             Spacer(Modifier.height(8.dp))
             if (state == null || !state.enabled || state.profile == null) {
                 Text(
-                    if (state?.enabled == false) "Weeno Quest est désactivé sur le serveur."
-                    else "Weeno Quest n’est pas disponible pour ce compte.",
+                    if (state?.enabled == false) "Weeno est désactivé sur le serveur."
+                    else "Weeno n’est pas disponible pour ce compte.",
                     color = WineColors.muted,
                     fontSize = 13.sp
                 )
@@ -1789,7 +1789,7 @@ private fun BadgeTile(b: RpgBadge) {
     }
 }
 
-// ─── Célébrations + intro + détail badge + admin Weeno Quest ───────────────────
+// ─── Célébrations + intro + détail badge + admin Weeno ───────────────────
 
 @Composable
 fun RpgCelebrationOverlay(vm: AppViewModel) {
@@ -1813,7 +1813,7 @@ private fun RpgIntroDialog(onDiscover: () -> Unit, onLater: () -> Unit) {
     AlertDialog(
         onDismissRequest = onLater,
         title = {
-            Text("⚔ Weeno Quest", fontWeight = FontWeight.Bold, color = WineColors.text)
+            Text("⚔ Weeno", fontWeight = FontWeight.Bold, color = WineColors.text)
         },
         text = {
             Text(
@@ -2036,7 +2036,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
         scope.launch {
             busy = true
             val payload = mutableMapOf<String, Any?>(key to value)
-            // Allumer Weeno Quest = moteur + UI (évite ON invisible)
+            // Allumer Weeno = moteur + UI (évite ON invisible)
             if (key == "enabled" && value) payload["ui"] = true
             val next = withContext(Dispatchers.IO) {
                 vm.api.adminRpgPatchSettings(payload)
@@ -2044,8 +2044,8 @@ fun RpgAdminSheet(vm: AppViewModel) {
             if (next != null) {
                 rpgFlags = next
                 val msg = when {
-                    key == "enabled" && value -> "Weeno Quest allumé"
-                    key == "enabled" -> "Weeno Quest coupé"
+                    key == "enabled" && value -> "Weeno allumé"
+                    key == "enabled" -> "Weeno coupé"
                     key == "allow_invites" && value -> "Invités inclus"
                     key == "allow_invites" -> "Invités exclus"
                     else -> "Réglage enregistré"
@@ -2103,13 +2103,13 @@ fun RpgAdminSheet(vm: AppViewModel) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
-                Text("⚔ Admin Weeno Quest", color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text("⚔ Admin Weeno", color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 val unread = fbStats?.unread ?: 0
                 val f = rpgFlags
                 val status = when {
                     f == null -> "${players.size} joueur(s)"
-                    f.enabled -> "Weeno Quest ON · ${players.size} joueur(s)"
-                    else -> "Weeno Quest OFF · ${players.size} joueur(s)"
+                    f.enabled -> "Weeno ON · ${players.size} joueur(s)"
+                    else -> "Weeno OFF · ${players.size} joueur(s)"
                 }
                 Text(
                     if (unread > 0) "$status · $unread feedback" else status,
@@ -2229,7 +2229,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                         fontSize = 12.sp
                     )
                     Spacer(Modifier.height(10.dp))
-                    // Weeno Quest global
+                    // Weeno global
                     Column(
                         Modifier
                             .fillMaxWidth()
@@ -2249,7 +2249,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "Weeno Quest (tout le monde)",
+                                    "Weeno (tout le monde)",
                                     color = WineColors.text,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
@@ -2315,7 +2315,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                     if (!gameOn) {
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "Weeno Quest est OFF — cet onglet sert à le rallumer. Le menu ⚔ reste toujours visible pour l’admin.",
+                            "Weeno est OFF — cet onglet sert à le rallumer. Le menu ⚔ reste toujours visible pour l’admin.",
                             color = Gold,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
@@ -2588,7 +2588,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                                 }
                                 busy = false
                                 if (ok) {
-                                    vm.showToast("Niveau $lv pour $name", ToastPayload.Variant.SUCCESS, label = "Weeno Quest")
+                                    vm.showToast("Niveau $lv pour $name", ToastPayload.Variant.SUCCESS, label = "Weeno")
                                     selected = null
                                     reload()
                                 } else {
@@ -2612,7 +2612,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                                         }
                                         busy = false
                                         if (ok) {
-                                            vm.showToast("XP ${if (d > 0) "+" else ""}$d pour $name", ToastPayload.Variant.SUCCESS, label = "Weeno Quest")
+                                            vm.showToast("XP ${if (d > 0) "+" else ""}$d pour $name", ToastPayload.Variant.SUCCESS, label = "Weeno")
                                             selected = null
                                             reload()
                                         } else {
@@ -2636,7 +2636,7 @@ fun RpgAdminSheet(vm: AppViewModel) {
                                 }
                                 busy = false
                                 if (ok) {
-                                    vm.showToast("Reset journalier $name", ToastPayload.Variant.SUCCESS, label = "Weeno Quest")
+                                    vm.showToast("Reset journalier $name", ToastPayload.Variant.SUCCESS, label = "Weeno")
                                     selected = null
                                     reload()
                                 } else {

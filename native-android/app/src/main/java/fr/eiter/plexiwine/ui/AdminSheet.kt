@@ -400,7 +400,7 @@ fun AdminSheet(vm: AppViewModel) {
                     // ── Outils (parité iOS) ──
                     Text("Outils", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
-                    WeenoPrimaryButton("⚔ Admin Weeno Quest") {
+                    WeenoPrimaryButton("⚔ Admin Weeno") {
                         vm.openSheet(WeenoSheet.RPG_ADMIN)
                     }
                     Spacer(Modifier.height(8.dp))
@@ -656,7 +656,7 @@ private fun AdminDashboard(
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("📊 Tableau de bord", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Text("Weeno Quest", color = WineColors.accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
+            Text("Weeno", color = WineColors.accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
         }
         Spacer(Modifier.height(8.dp))
         Text("Versions", color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 12.sp)

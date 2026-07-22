@@ -10,7 +10,7 @@ object ServerSettings {
     /** Manifest versions IPA/APK/web (portail public). */
     const val versionsURL = "https://$CANONICAL_HOST/mobile/wine/versions.json"
     const val portalURL = "https://$CANONICAL_HOST/mobile/wine/"
-    /** Weeno Quest alpha (clone isolé) — invites IPA/APK */
+    /** Weeno alpha (clone isolé) — invites IPA/APK */
     const val ALPHA_API_BASE_STRING = "https://$CANONICAL_HOST/wine/"
     const val ALPHA_WAN_IPV4_API_BASE = "https://$WAN_IPV4/wine/"
     const val LAN_PROBE_TIMEOUT_SEC = 15L

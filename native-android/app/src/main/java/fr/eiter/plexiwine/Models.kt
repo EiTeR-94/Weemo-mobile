@@ -5,10 +5,14 @@ import java.util.UUID
 
 data class MeResponse(
     val user: String? = null,
+    val username: String? = null,
     val auth: Boolean = false,
     @SerializedName("is_admin") val isAdmin: Boolean = false,
     @SerializedName("is_invite") val isInvite: Boolean = false
-)
+) {
+    /** Weeno renvoie `username` ; Beer renvoyait `user`. */
+    val resolvedUser: String? get() = user ?: username
+}
 
 data class LoginResponse(
     val ok: Boolean = false,
@@ -103,13 +107,17 @@ data class CheckinItem(
     val barcode: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("photo_url") val photoURL: String? = null,
+    @SerializedName("photo_path") val photoPath: String? = null,
     val flavors: List<String>? = null,
     val hops: List<String>? = null,
     @SerializedName("hidden_from_partner") val hiddenFromPartner: Boolean? = null,
     @SerializedName("vivino_id") val vivinoId: Int? = null,
     /** Lieu / lien de dégustation (optionnel). */
     val location: String? = null
-)
+) {
+    /** Weeno stocke photo_path (pas photo_url Beer). */
+    val resolvedPhoto: String? get() = photoURL ?: photoPath
+}
 
 data class HistoryStats(
     val total: Int = 0,
@@ -188,7 +196,7 @@ data class CreateCheckinResult(
     val duplicate: Boolean? = null,
     val error: String? = null,
     @SerializedName("previous_checkin") val previousCheckin: PreviousCheckin? = null,
-    /** Weeno Quest loot (null si RPG off / non autorisé) */
+    /** Weeno loot (null si RPG off / non autorisé) */
     val rpg: RpgLoot? = null
 )
 
@@ -256,3 +264,11 @@ data class ToastPayload(
 ) {
     enum class Variant { INFO, SUCCESS, WARN, ERROR, DUPLICATE }
 }
+
+
+data class CheckinsListResponse(
+    val items: List<CheckinItem>? = null,
+    val count: Int? = null,
+    val limit: Int? = null,
+    val offset: Int? = null
+)

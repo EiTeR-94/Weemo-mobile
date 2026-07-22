@@ -81,7 +81,7 @@ fun WineApp(vm: AppViewModel) {
         }
         // Bannière haut d'écran = iOS (tap ou × pour fermer)
         ToastOverlay(toast = vm.toast, onDismiss = { vm.hideToast() })
-        // Weeno Quest intro + célébrations (au-dessus du toast)
+        // Weeno intro + célébrations (au-dessus du toast)
         if (vm.isLoggedIn) {
             RpgCelebrationOverlay(vm)
         }
@@ -406,7 +406,7 @@ private fun MainScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Weeno Quest", style = MaterialTheme.typography.headlineSmall, color = WineColors.text)
+                        Text("Weeno", style = MaterialTheme.typography.headlineSmall, color = WineColors.text)
                         // APK d’abord (version installée), webapp ensuite — parité iOS
                         Text(
                             buildString {
@@ -454,7 +454,7 @@ private fun MainScreen(vm: AppViewModel) {
                     )
                     Spacer(Modifier.height(8.dp))
                 }
-                // Weeno Quest HUD (raccourci grimoire, comme PWA)
+                // Weeno HUD (raccourci grimoire, comme PWA)
                 vm.rpgState?.profile?.takeIf { vm.rpgActive }?.let { profile ->
                     BqHudBar(profile) {
                         vm.refreshRpg()
@@ -679,8 +679,8 @@ private fun AccountMenuOverlay(
             if (vm.isAdmin) {
                 AccountSection("Admin")
                 AccountMenuItem("⚙️ Administration") { onOpen(WeenoSheet.ADMIN) }
-                // Toujours visible admin : même si Weeno Quest est coupé (pour le rallumer)
-                AccountMenuItem("⚔ Weeno Quest") { onOpen(WeenoSheet.RPG_ADMIN) }
+                // Toujours visible admin : même si Weeno est coupé (pour le rallumer)
+                AccountMenuItem("⚔ Weeno") { onOpen(WeenoSheet.RPG_ADMIN) }
                 AccountMenuItem("📝 Patch notes") { onOpen(WeenoSheet.PATCHNOTES) }
             }
 
@@ -2085,7 +2085,7 @@ private fun HistoryCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             WeenoAuthImage(
-                path = item.photoURL,
+                path = item.resolvedPhoto,
                 api = vm.api,
                 modifier = Modifier.size(88.dp).clip(RoundedCornerShape(10.dp))
             )
@@ -2183,11 +2183,11 @@ private fun GallerySheet(vm: AppViewModel) {
             if (filterStyle.isEmpty() && filterRating <= 0f && filterPeriod.isEmpty()) {
                 cache.saveCheckins(live)
             }
-            items = live.filter { !it.photoURL.isNullOrBlank() }
+            items = live.filter { !it.resolvedPhoto.isNullOrBlank() }
             offlineHint = null
             vm.prewarmRecentPhotos()
         } catch (_: Exception) {
-            val cached = cache.loadCheckins().filter { !it.photoURL.isNullOrBlank() }
+            val cached = cache.loadCheckins().filter { !it.resolvedPhoto.isNullOrBlank() }
             items = cached
             offlineHint = if (cached.isEmpty()) {
                 "Hors ligne — aucune photo en cache"
@@ -2199,7 +2199,7 @@ private fun GallerySheet(vm: AppViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        val cached = cache.loadCheckins().filter { !it.photoURL.isNullOrBlank() }
+        val cached = cache.loadCheckins().filter { !it.resolvedPhoto.isNullOrBlank() }
         if (cached.isNotEmpty()) items = cached
         reload()
     }
@@ -2254,7 +2254,7 @@ private fun GallerySheet(vm: AppViewModel) {
                                     }
                             ) {
                                 WeenoAuthImage(
-                                    path = item.photoURL,
+                                    path = item.resolvedPhoto,
                                     api = api,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -2293,7 +2293,7 @@ private fun GallerySheet(vm: AppViewModel) {
             text = {
                 Column {
                     WeenoAuthImage(
-                        path = item.photoURL,
+                        path = item.resolvedPhoto,
                         api = api,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2667,9 +2667,9 @@ private fun CheckinDetailSheet(vm: AppViewModel, item: CheckinItem) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (!item.photoURL.isNullOrBlank()) {
+            if (!item.resolvedPhoto.isNullOrBlank()) {
                 WeenoAuthImage(
-                    path = item.photoURL,
+                    path = item.resolvedPhoto,
                     api = vm.api,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2876,7 +2876,7 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
                     vm.showToast(e.message ?: "Caméra", ToastPayload.Variant.ERROR)
                 }
             }
-            if (item.photoURL != null || newPhoto != null) {
+            if (item.resolvedPhoto != null || newPhoto != null) {
                 WeenoSecondaryButton("Retirer la photo") {
                     removePhoto = true
                     newPhoto = null

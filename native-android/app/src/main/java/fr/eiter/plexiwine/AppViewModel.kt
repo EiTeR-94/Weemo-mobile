@@ -65,7 +65,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var pendingDeletes by mutableStateOf<List<Int>>(emptyList())
         private set
 
-    /** Weeno Quest — null = pas encore chargé / off */
+    /** Weeno — null = pas encore chargé / off */
     var rpgState by mutableStateOf<RpgState?>(null)
         private set
     var lastRpgLoot by mutableStateOf<RpgLoot?>(null)
@@ -255,9 +255,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 api.enableInviteMode(true)
                 try {
                     val me = api.me()
-                    if (!me.user.isNullOrBlank()) {
+                    if (!me.resolvedUser.isNullOrBlank()) {
                         applySession(
-                            me.user!!,
+                            me.resolvedUser!!,
                             admin = false,
                             loggedIn = true,
                             invite = true,
@@ -288,8 +288,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } else if (api.cookieJar.hasSession()) {
                 try {
                     val me = api.me()
-                    if (!me.user.isNullOrBlank()) {
-                        applySession(me.user!!, me.isAdmin, true, invite = me.isInvite)
+                    if (!me.resolvedUser.isNullOrBlank()) {
+                        applySession(me.resolvedUser!!, me.isAdmin, true, invite = me.isInvite)
                         serverVersion = try {
                             api.version()
                         } catch (_: Exception) {
@@ -416,7 +416,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             msg,
             if (hasCeleb) ToastPayload.Variant.SUCCESS else ToastPayload.Variant.INFO,
             detail = bits.joinToString(" · ").ifBlank { null },
-            label = "Weeno Quest",
+            label = "Weeno",
             durationMs = when {
                 hasCeleb -> 2200
                 loot.dailySoftCapped -> 5600
@@ -465,9 +465,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (ok) {
                 refreshRpg()
-                showToast("Classe équipée", ToastPayload.Variant.SUCCESS, label = "Weeno Quest")
+                showToast("Classe équipée", ToastPayload.Variant.SUCCESS, label = "Weeno")
             } else {
-                showToast("Impossible d’équiper", ToastPayload.Variant.ERROR, label = "Weeno Quest")
+                showToast("Impossible d’équiper", ToastPayload.Variant.ERROR, label = "Weeno")
             }
             onDone(ok)
         }
@@ -678,7 +678,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 applySession(
-                    resp.user ?: me.user ?: username,
+                    resp.user ?: me.resolvedUser ?: username,
                     resp.isAdmin ?: me.isAdmin,
                     true,
                     invite = false
@@ -879,7 +879,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val recent = api.checkins(limit = 24, offset = 0)
                 listCache.saveCheckins(recent)
                 for (item in recent) {
-                    val p = item.photoURL ?: continue
+                    val p = item.resolvedPhoto ?: continue
                     if (imageCache.has(p)) continue
                     try {
                         val bytes = api.downloadAsset(p)
