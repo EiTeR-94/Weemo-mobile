@@ -1,17 +1,17 @@
-# IPA native SwiftUI WeenoBis — build auto + Release GitHub
+# IPA native SwiftUI Weeno — build auto + Release GitHub
 #
 # Après release, le serveur Plexi tire l’IPA :
 #   timer wine-mobile-sync (à activer) ou manuel
 #   → /home/eiter/scripts/wine-mobile-sync-github.sh
-#   → /var/www/wine-bis-mobile/WeenoBis.ipa + versions.json
+#   → /var/www/wine-mobile/WeenoBis.ipa + versions.json
 # Portail : https://eiter.freeboxos.fr/mobile/wine-bis/
 
-name: Build iOS IPA
+name: Build iOS IPA (WeenoBis)
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [weenobis]
     paths:
       - "native-ios/**"
       - "scripts/build-native-ipa.sh"
@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ios-ipa-${{ github.ref }}
+  group: ios-ipa-weenobis-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -60,12 +60,15 @@ jobs:
           test -f "$APP/$BIN"
           file "$APP/$BIN" | grep -E "Mach-O.*arm64"
           ! find build/Payload -name "index.html" | grep -q .
-          cp -f build/Weeno.ipa build/WeenoBis.ipa 2>/dev/null || cp -f build/*.ipa build/WeenoBis.ipa
+          shopt -s nullglob
+          IPAS=(build/*.ipa)
+          test ${#IPAS[@]} -gt 0
+          cp -f "${IPAS[0]}" build/WeenoBis.ipa 2>/dev/null || cp -f build/*.ipa build/WeenoBis.ipa
 
       - name: Release GitHub (IPA)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios-build-${{ github.run_number }}
+          tag_name: weenobis-ios-build-${{ github.run_number }}
           name: WeenoBis iOS build ${{ github.run_number }}
           body: |
             Build automatique WeenoBis iOS.
