@@ -1,0 +1,67 @@
+# PlexiWine — app Android native (parité iOS)
+
+Application **Kotlin + Jetpack Compose**, miroir de `native-ios/` + **mode invité WAN**.
+
+## Expérience cible
+
+### Compte maison (owner)
+- Login + session cookie persistée (`wine_session`)
+- TLS LAN (`192.168.1.50:8444`) avec policy domaine (Let’s Encrypt) **ou VPN**
+- Wizard (scan EAN **live auto** CameraX + ML Kit, parité iOS), historique, wishlist, idées cadeaux, offline queue…
+- Fallback photo + saisie EAN manuelle si besoin
+
+### Invité (4G/5G, sans VPN)
+- Onglet **Invitation** → coller le lien `…/wine/join/…` (ou deep link)
+- `POST /api/native/join` → Bearer device-bound
+- Base URL WAN forcée (`eiter.freeboxos.fr`, IPv4 prefer)
+- Historique + check-ins perso uniquement (pas wishlist / cadeaux / admin)
+- **Pas de bouton Déconnexion** (évite de perdre l’accès device-bound)
+
+## Build local (source de vérité APK)
+
+```bash
+# Distribution — même signature que le portail (obligatoire pour updates invités)
+./scripts/build-release-apk.sh            # → dist/WeenoOff.apk
+./scripts/build-release-apk.sh --publish  # + /var/www/wine-mobile/
+
+# Debug dev only (signature Android Debug — ne PAS publier aux invités)
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+cd native-android && ./gradlew assembleDebug
+```
+
+Signature dist : **`SIGNING.md`**. Keystore : `/etc/plexi/secrets/plexi-wine-release.*` (hors git).  
+**Pas de CI GitHub pour l’APK** — IPA seule via GitHub + `beer-mobile-sync`.
+
+## Install
+
+### Owner / couple
+1. APK : `dist/WeenoOff.apk` ou `https://eiter.freeboxos.fr/mobile/wine/WeenoOff.apk`
+2. Autoriser sources inconnues
+3. Wi‑Fi maison ou VPN → login compte permanent
+
+### Invité (4G/5G)
+1. Même APK (lien public ci-dessus)
+2. Ouvrir le lien d’invitation → copier dans l’app **Invitation** → Activer
+3. Pas de Wi‑Fi Freebox ni VPN requis
+
+## Réseau
+
+| Mode | URL |
+|------|-----|
+| Owner (prioritaire) | `https://192.168.1.50:8444/wine/` |
+| Owner (fallback) | `https://eiter.freeboxos.fr/wine/` |
+| Invité | WAN FQDN uniquement (+ fallback IPv4) |
+
+## Structure
+
+```
+app/src/main/java/fr/eiter/plexiwine/
+  WineAPI.kt          # API + multipart + assets
+  HomelabTls.kt       # TLS LAN
+  SessionStore.kt     # cookies persistés
+  OfflineQueue.kt     # file offline
+  AppViewModel.kt     # session / réseau / save
+  ui/WineApp.kt       # écrans + wizard + sheets
+  ui/Components.kt
+  ui/theme/Theme.kt   # palette iOS
+```

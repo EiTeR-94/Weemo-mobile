@@ -1,0 +1,72 @@
+name: WineNative
+options:
+  bundleIdPrefix: fr.eiter
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    INFOPLIST_FILE: WineNative/Resources/Info.plist
+    PRODUCT_BUNDLE_IDENTIFIER: fr.eiter.plexiwinebis
+    MARKETING_VERSION: "0.1.0-bis"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    DEVELOPMENT_TEAM: ""
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+targets:
+  WineNative:
+    type: application
+    platform: iOS
+    sources:
+      - path: WineNative/Sources
+        excludes:
+          - WeenoWebShellView.swift
+      - path: WineNative/Resources/Assets.xcassets
+    entitlements:
+      path: WineNative/Resources/WineNative.entitlements
+    settings:
+      base:
+        PRODUCT_NAME: WeenoBis
+        GENERATE_INFOPLIST_FILE: NO
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
+  WineNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WineNative/Tests
+    dependencies:
+      - target: WineNative
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/WeenoBis.app/WeenoBis"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  WineNative:
+    build:
+      targets:
+        WineNative: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  WineNativeTests:
+    build:
+      targets:
+        WineNativeTests: all
+    test:
+      targets:
+        - WineNativeTests

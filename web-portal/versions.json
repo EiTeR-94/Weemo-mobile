@@ -1,0 +1,15 @@
+{
+  "ios": "?",
+  "ios_build": "?",
+  "ios_updated_at": null,
+  "android": "0.1.0-bis",
+  "android_build": "1",
+  "android_updated_at": "22-07-2026 15:28",
+  "webapp": "0.7.9-weenobis-vivino-vision",
+  "webapp_updated_at": "22-07-2026 14:36",
+  "manifest_generated_at": "22-07-2026 15:28",
+  "updated_at": "22-07-2026 15:28",
+  "updated_at_iso": "2026-07-22T13:28:57Z",
+  "portal_url": "https://eiter.freeboxos.fr/mobile/wine/",
+  "note": "L’IPA et l’APK ont des cycles de maj séparés. Compare la version de ta plateforme."
+}

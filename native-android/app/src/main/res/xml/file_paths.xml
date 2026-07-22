@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Pour les photos et scans du wizard (cacheDir/wine/...) -->
+    <cache-path name="beer" path="beer/" />
+    <!-- fallback large -->
+    <cache-path name="cache" path="." />
+</paths>

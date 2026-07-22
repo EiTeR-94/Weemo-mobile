@@ -1,0 +1,11 @@
+[Unit]
+Description=Weeno mobile — sync IPA from GitHub
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=eiter
+Group=eiter
+Environment=WINE_MOBILE_GITHUB_REPO=EiTeR-94/Weemo-mobile
+ExecStart=/home/eiter/scripts/wine-mobile-sync-github.sh
+Nice=10

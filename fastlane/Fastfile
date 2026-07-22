@@ -1,0 +1,39 @@
+# IPA non signée → AltStore re-signe (compte Apple gratuit)
+
+opt_out_usage
+default_platform(:ios)
+
+platform :ios do
+  desc "Build IPA native SwiftUI non signée"
+  lane :build_ipa do
+    setup_ci(force: true)
+
+    project = "native-ios/BeerNative.xcodeproj"
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: project,
+      targets: ["BeerNative"],
+      bundle_identifier: "fr.eiter.plexibeer",
+      code_sign_identity: "",
+      team_id: ""
+    )
+
+    build_app(
+      project: project,
+      scheme: "BeerNative",
+      configuration: "Release",
+      export_method: "development",
+      output_directory: "build",
+      output_name: "PlexiBeer",
+      clean: true,
+      skip_codesigning: true,
+      skip_package_ipa: false,
+      xcargs: "CODE_SIGN_IDENTITY='-' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO"
+    )
+
+    ipa = Dir["build/*.ipa"].first
+    UI.user_error!("IPA non générée") unless ipa
+    UI.success("IPA native : #{ipa}")
+  end
+end

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fond webapp Weeno #120a0e -->
+    <style name="Theme.PlexiWine" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#FF120A0E</item>
+        <item name="android:navigationBarColor">#FF120A0E</item>
+        <item name="android:windowBackground">#FF120A0E</item>
+        <item name="colorPrimary">#FFC45C7A</item>
+        <item name="colorPrimaryDark">#FF8B1E3F</item>
+        <item name="colorAccent">#FFC45C7A</item>
+    </style>
+</resources>

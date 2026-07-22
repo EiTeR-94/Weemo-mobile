@@ -1,0 +1,47 @@
+package fr.eiter.plexiwine
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import fr.eiter.plexiwine.ui.WineApp
+import fr.eiter.plexiwine.ui.theme.WineColors
+import fr.eiter.plexiwine.ui.theme.PlexiWineTheme
+
+/** App native Compose Weeno (parité beer-mobile, domaine vin). */
+class MainActivity : ComponentActivity() {
+    private val vm: AppViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ServerSettings.useEffectiveBaseIfNeeded()
+        handleInviteIntent(intent)
+        setContent {
+            PlexiWineTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = WineColors.bg
+                ) {
+                    WineApp(vm = vm)
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleInviteIntent(intent)
+    }
+
+    private fun handleInviteIntent(intent: Intent?) {
+        val data = intent?.data?.toString() ?: return
+        if (data.contains("/wine/join")) {
+            vm.offerInviteLink(data)
+        }
+    }
+}
