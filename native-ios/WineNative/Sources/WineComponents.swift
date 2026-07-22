@@ -201,29 +201,88 @@ struct WeenoPreviewCard: View {
     let product: WineProduct
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(product.wineName)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(Theme.text)
-            Text(metaLine)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.muted)
-            if !product.summary.isEmpty {
-                Text(product.summary)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.text)
-                    .lineSpacing(3)
+        HStack(alignment: .top, spacing: 12) {
+            if let urlStr = product.photoURL, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        RoundedRectangle(cornerRadius: 10).fill(Theme.photoBg)
+                            .overlay(Text("🍷").font(.title3))
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Theme.photoBg)
+                    .frame(width: 72, height: 72)
+                    .overlay(Text("🍷").font(.title3))
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("✓ Sélectionné")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.ok)
+                Text(product.wineName)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Theme.text)
+                Text(metaLine)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                if let grapes = product.grapes, !grapes.isEmpty {
+                    Text("Cépages : \(grapes.joined(separator: ", "))")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                if !product.summary.isEmpty {
+                    Text(product.summary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.text)
+                        .lineSpacing(2)
+                }
+            }
+            Spacer(minLength: 0)
         }
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .beerCard()
+        .background(Theme.card)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.ok, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private var metaLine: String {
-        [product.producer, product.displayStyle, product.abv.map { String(format: "%.1f%%", $0) }]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty && $0 != "—" }
-            .joined(separator: " · ")
+        var parts: [String] = []
+        if !product.producer.isEmpty, product.producer != "—" { parts.append(product.producer) }
+        if let v = product.vintage { parts.append(String(v)) }
+        if let c = product.styleFr ?? (product.style != "Unknown" ? product.style : nil), !c.isEmpty {
+            parts.append(c)
+        }
+        if let r = product.region, !r.isEmpty { parts.append(r) }
+        if let c = product.country, !c.isEmpty { parts.append(c) }
+        if let a = product.abv { parts.append(String(format: "%.1f%%", a)) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Barre d'étoiles fractionnelle (historique / cadeaux) — largeur fixe fiable.
+struct WeenoStarBar: View {
+    let rating: Double
+    var size: CGFloat = 12
+    private let totalWidth: CGFloat = 55
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Text("★★★★★")
+                .font(.system(size: size))
+                .foregroundStyle(Theme.starOff)
+            Text("★★★★★")
+                .font(.system(size: size))
+                .foregroundStyle(Theme.star)
+                .frame(width: WineFormatters.starFillWidth(rating, totalWidth: totalWidth), alignment: .leading)
+                .clipped()
+        }
+        .frame(width: totalWidth, alignment: .leading)
     }
 }
 

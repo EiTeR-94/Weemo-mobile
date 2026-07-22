@@ -19,7 +19,7 @@ struct GallerySheetView: View {
     private let galleryPageSize = 50
 
     private var withPhotos: [CheckinItem] {
-        items.filter { ($0.photoURL?.isEmpty == false) }
+        items.filter { !($0.resolvedPhoto ?? "").isEmpty }
     }
 
     var body: some View {

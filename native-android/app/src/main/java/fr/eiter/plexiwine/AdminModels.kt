@@ -84,6 +84,7 @@ data class ReferentialEntry(
 
 data class ReferentialsResponse(
     val colors: List<ReferentialEntry>? = null,
+    val grapes: List<ReferentialEntry>? = null,
     val flavors: List<ReferentialEntry>? = null,
     val regions: List<ReferentialEntry>? = null,
     val styles: List<ReferentialEntry>? = null,

@@ -267,8 +267,9 @@ struct GiftIdea: Identifiable, Codable {
     let forUser: String?
 
     enum CodingKeys: String, CodingKey {
-        case producer, style, rating, comment
+        case producer, style, rating, comment, username
         case wineName = "wine_name"
+        case wineColor = "wine_color"
         case photoPath = "photo_path"
         case createdAt = "created_at"
         case likedBy = "liked_by"
@@ -279,12 +280,14 @@ struct GiftIdea: Identifiable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         wineName = try c.decode(String.self, forKey: .wineName)
         producer = try c.decodeIfPresent(String.self, forKey: .producer)
-        style = try c.decodeIfPresent(String.self, forKey: .style)
+        style = (try c.decodeIfPresent(String.self, forKey: .style))
+            ?? (try c.decodeIfPresent(String.self, forKey: .wineColor))
         rating = try c.decodeIfPresent(Double.self, forKey: .rating)
         comment = try c.decodeIfPresent(String.self, forKey: .comment)
         photoPath = try c.decodeIfPresent(String.self, forKey: .photoPath)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
-        likedBy = try c.decodeIfPresent(String.self, forKey: .likedBy)
+        likedBy = (try c.decodeIfPresent(String.self, forKey: .likedBy))
+            ?? (try c.decodeIfPresent(String.self, forKey: .username))
         forUser = try c.decodeIfPresent(String.self, forKey: .forUser)
         id = "\(wineName)-\(likedBy ?? "")-\(createdAt ?? "")"
     }
@@ -317,6 +320,20 @@ struct CoupleStats: Codable {
         let total: Int
         var id: String { username }
     }
+}
+
+struct VisionKeyDetail: Identifiable {
+    let index: Int
+    let lastStatus: String
+    let rateLimited: Bool
+    let lastError: String?
+    var id: Int { index }
+}
+
+struct VisionStatus {
+    let available: Bool
+    let keys: Int
+    let detail: [VisionKeyDetail]
 }
 
 struct AdminUser: Identifiable, Codable {
@@ -501,6 +518,7 @@ struct ReferentialEntry: Codable, Identifiable {
 
 struct ReferentialsResponse: Codable {
     let colors: [ReferentialEntry]?
+    let grapes: [ReferentialEntry]?
     let flavors: [ReferentialEntry]?
     let regions: [ReferentialEntry]?
     // legacy beer keys (ignored)

@@ -1160,7 +1160,7 @@ private fun WeenoWizard(vm: AppViewModel) {
         labelPhotoFile = f
         scope.launch {
             busy = true
-            scanStatus = "Analyse en cours… (Gemini)"
+            scanStatus = "Analyse de l’étiquette…"
             try {
                 val jpeg = ImageUtils.compressJPEG(f.readBytes())
                 val scan = api.labelScan(jpeg)
@@ -1346,7 +1346,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                             val f = labelPhotoFile ?: return@WeenoPrimaryButton
                             scope.launch {
                                 busy = true
-                                scanStatus = "Analyse en cours… (Gemini)"
+                                scanStatus = "Analyse de l’étiquette…"
                                 try {
                                     val jpeg = ImageUtils.compressJPEG(f.readBytes())
                                     val scan = api.labelScan(jpeg)
@@ -1546,16 +1546,6 @@ private fun WeenoWizard(vm: AppViewModel) {
                         labelPhotoFile = null
                         scanStatus = "Cadre l’étiquette — touche pour photo"
                     }
-                    WeenoSecondaryButton("+ Ajouter à la liste « À boire »") {
-                        scope.launch {
-                            try {
-                                api.addWishlist(p.wineName, p.producer, p.style, p.barcode)
-                                vm.showToast("Ajouté à À boire ✓", ToastPayload.Variant.SUCCESS)
-                            } catch (e: Exception) {
-                                vm.showToast(e.message ?: "Échec", ToastPayload.Variant.ERROR)
-                            }
-                        }
-                    }
                     WeenoPrimaryButton("Continuer → photo") { vm.wizardStep = 2 }
                 }
             }
@@ -1681,11 +1671,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                 }
 
                 WeenoCard {
-                    Text("Commentaire (optionnel, 300 car.)", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                    Text("Commentaire (optionnel, 500 car.)", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = comment,
-                        onValueChange = { if (it.length <= 300) comment = it },
-                        placeholder = { Text("Terrasse, avec elle, à refaire…", color = WineColors.muted.copy(alpha = 0.6f)) },
+                        onValueChange = { if (it.length <= 500) comment = it },
+                        placeholder = { Text("Nez, bouche, accord…", color = WineColors.muted.copy(alpha = 0.6f)) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = WineColors.text,
@@ -1698,7 +1688,20 @@ private fun WeenoWizard(vm: AppViewModel) {
                         ),
                         shape = RoundedCornerShape(10.dp)
                     )
-                    Text("${comment.length}/300", color = WineColors.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.End))
+                    Text("${comment.length}/500", color = WineColors.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.End))
+                }
+
+                product?.takeIf { it.wineName.isNotBlank() }?.let { p ->
+                    WeenoSecondaryButton("+ Ajouter à la liste « À boire »") {
+                        scope.launch {
+                            try {
+                                api.addWishlist(p.wineName, p.producer, p.style, p.barcode)
+                                vm.showToast("Ajouté à À boire ✓", ToastPayload.Variant.SUCCESS)
+                            } catch (e: Exception) {
+                                vm.showToast(e.message ?: "Échec", ToastPayload.Variant.ERROR)
+                            }
+                        }
+                    }
                 }
 
                 WeenoSecondaryButton("← Retour") { vm.wizardStep = 2 }
@@ -2378,9 +2381,9 @@ private fun GiftsSheet(vm: AppViewModel) {
             if (minRating >= 5f && (g.rating ?: 0.0) < 4.99) return@filter false
             else if ((g.rating ?: 0.0) < minRating) return@filter false
         }
-        if (filterStyle.isNotEmpty() && g.style != filterStyle) return@filter false
+        if (filterStyle.isNotEmpty() && g.resolvedStyle != filterStyle) return@filter false
         if (search.isNotEmpty()) {
-            val hay = "${g.wineName} ${g.producer.orEmpty()} ${g.style.orEmpty()}".lowercase()
+            val hay = "${g.wineName} ${g.producer.orEmpty()} ${g.resolvedStyle.orEmpty()}".lowercase()
             if (!hay.contains(search.lowercase())) return@filter false
         }
         true
@@ -2438,14 +2441,14 @@ private fun GiftsSheet(vm: AppViewModel) {
                             Column(Modifier.weight(1f)) {
                                 Text(g.wineName, color = WineColors.text, fontWeight = FontWeight.Bold)
                                 Text(
-                                    "${g.producer ?: "—"} · ${g.style ?: "?"}",
+                                    "${g.producer ?: "—"} · ${g.resolvedStyle ?: "?"}",
                                     color = WineColors.muted,
                                     fontSize = 12.sp
                                 )
                                 g.rating?.let {
                                     Text("★ ${formatRating(it)}", color = WineColors.accent, fontSize = 12.sp)
                                 }
-                                Text("Notée par ${g.likedBy ?: "?"}", color = WineColors.muted, fontSize = 11.sp)
+                                Text("Notée par ${g.resolvedLikedBy ?: "?"}", color = WineColors.muted, fontSize = 11.sp)
                                 g.comment?.takeIf { it.isNotBlank() }?.let {
                                     Text("« $it »", color = WineColors.text, fontSize = 12.sp)
                                 }

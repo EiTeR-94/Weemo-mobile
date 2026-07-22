@@ -627,6 +627,14 @@ class WineAPI private constructor(context: Context) {
 
     suspend fun wishlist(): List<WishlistItem> {
         val (body, _) = execute(requestBuilder("api/wishlist").get().build())
+        try {
+            val root = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val items = root.getAsJsonArray("items")
+            if (items != null) {
+                val type = object : TypeToken<List<WishlistItem>>() {}.type
+                return gson.fromJson(items, type) ?: emptyList()
+            }
+        } catch (_: Exception) {}
         val type = object : TypeToken<List<WishlistItem>>() {}.type
         return gson.fromJson(body, type) ?: emptyList()
     }
@@ -781,6 +789,37 @@ class WineAPI private constructor(context: Context) {
             }
         } catch (_: Exception) {
             LookupResponse(ok = false, error = "decode", vivinoId = bid)
+        }
+    }
+
+    data class VisionKeyDetail(val index: Int, val lastStatus: String, val rateLimited: Boolean, val lastError: String?)
+    data class VisionStatus(val available: Boolean, val keys: Int, val detail: List<VisionKeyDetail>)
+
+    suspend fun visionStatus(): VisionStatus = withContext(Dispatchers.IO) {
+        try {
+            val (body, code) = execute(requestBuilder("api/health").get().build())
+            if (code !in 200..299) return@withContext VisionStatus(false, 0, emptyList())
+            val root = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val v = root.getAsJsonObject("vision") ?: return@withContext VisionStatus(false, 0, emptyList())
+            val detail = mutableListOf<VisionKeyDetail>()
+            v.getAsJsonArray("gemini_keys_detail")?.forEach { el ->
+                val o = el.asJsonObject
+                detail.add(
+                    VisionKeyDetail(
+                        index = o.get("index")?.asInt ?: 0,
+                        lastStatus = o.get("last_status")?.asString ?: "unknown",
+                        rateLimited = o.get("rate_limited")?.asBoolean ?: false,
+                        lastError = o.get("last_error")?.asString
+                    )
+                )
+            }
+            VisionStatus(
+                available = v.get("available")?.asBoolean ?: false,
+                keys = v.get("gemini_keys")?.asInt ?: detail.size,
+                detail = detail
+            )
+        } catch (_: Exception) {
+            VisionStatus(false, 0, emptyList())
         }
     }
 

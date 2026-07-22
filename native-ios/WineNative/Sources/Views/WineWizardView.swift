@@ -254,9 +254,6 @@ struct WineWizardView: View {
                     clearProduct()
                     labelPreview = nil
                 }
-                WeenoSecondaryButton(title: "+ Ajouter à la liste « À boire »") {
-                    Task { await addToWishlist(product) }
-                }
                 WeenoPrimaryButton(title: "Continuer → photo") { step = 2 }
             }
         }
@@ -415,6 +412,12 @@ struct WineWizardView: View {
             }
             .beerCard()
 
+            if let product, !product.wineName.isEmpty {
+                WeenoSecondaryButton(title: "+ Ajouter à la liste « À boire »") {
+                    Task { await addToWishlist(product) }
+                }
+            }
+
             WeenoSecondaryButton(title: "← Retour") { step = 2 }
             WeenoPrimaryButton(
                 title: saving ? "Enregistrement…" : "Enregistrer",
@@ -433,10 +436,9 @@ struct WineWizardView: View {
         guard let raw = image.jpegData(compressionQuality: 0.92) else { return }
         let jpeg = WineImageUtils.compressJPEG(raw)
         busy = true
-        scanStatus = "Analyse en cours… (Gemini)"
+        scanStatus = "Analyse de l’étiquette…"
         defer { busy = false }
         do {
-            // Même endpoint webapp : POST /api/label-scan (Gemini 2 clés + candidats Vivino)
             let scan = try await app.api.labelScan(jpeg: jpeg)
             if let n = scan.wineName, !n.isEmpty {
                 vivinoQuery = [scan.producer, n].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
@@ -448,21 +450,31 @@ struct WineWizardView: View {
 
             if !scan.candidates.isEmpty {
                 vivinoResults = Array(scan.candidates.prefix(5))
-                scanStatus = scan.aiAvailable
-                    ? "Étiquette lue — choisis le bon vin"
-                    : "Scan partiel — suggestions Vivino"
+                scanStatus = "Étiquette lue — tape le bon vin (\(scan.candidates.count) suggestion(s))"
                 app.showToast("\(scan.candidates.count) suggestion(s)", variant: .success)
             } else if scan.aiAvailable {
-                scanStatus = "Étiquette lue — cherche sur Vivino"
-                if vivinoQuery.count >= 2 {
-                    await searchVivino()
-                }
+                scanStatus = "Étiquette lue — aucun candidat Vivino, affine la recherche"
+                if vivinoQuery.count >= 2 { await searchVivino() }
             } else {
-                scanStatus = scan.aiError ?? "Scan indisponible — saisis ou cherche sur Vivino"
+                let raw = (scan.aiError ?? "").lowercased()
+                if raw.contains("429") || raw.contains("quota") || raw.contains("rate") {
+                    scanStatus = "Scan temporairement saturé — réessaie dans 1 min ou saisie manuelle"
+                } else if raw.contains("clé") || raw.contains("key") || raw.contains("aucune") {
+                    scanStatus = "Scan IA indisponible (config serveur) — saisie / Vivino manuelle"
+                } else if !raw.isEmpty {
+                    scanStatus = "Échec scan : \(scan.aiError!.prefix(120))"
+                } else {
+                    scanStatus = "Scan indisponible — saisis le vin ou cherche sur Vivino"
+                }
                 showManual = true
             }
         } catch let err {
-            scanStatus = err.localizedDescription
+            let m = err.localizedDescription
+            if m.contains("429") || m.lowercased().contains("quota") {
+                scanStatus = "Scan saturé (limite API) — réessaie plus tard"
+            } else {
+                scanStatus = "Erreur scan : \(m.prefix(140))"
+            }
         }
     }
 

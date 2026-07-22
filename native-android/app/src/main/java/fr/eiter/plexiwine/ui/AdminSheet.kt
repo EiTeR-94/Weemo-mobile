@@ -420,10 +420,41 @@ fun AdminSheet(vm: AppViewModel) {
                         Text(it, color = WineColors.ok, fontSize = 12.sp)
                     }
                     Spacer(Modifier.height(14.dp))
+                    // Statut clés scan étiquette
+                    var vision by remember { mutableStateOf<WineAPI.VisionStatus?>(null) }
+                    LaunchedEffect(Unit) {
+                        vision = withContext(Dispatchers.IO) { try { vm.api.visionStatus() } catch (_: Exception) { null } }
+                    }
+                    Text("Scan étiquette (clés API)", color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    val v = vision
+                    if (v == null) {
+                        Text("Chargement…", color = WineColors.muted, fontSize = 12.sp)
+                    } else {
+                        Text(
+                            if (v.available) "${v.keys} clé(s) configurée(s)" else "Scan IA non configuré",
+                            color = WineColors.muted,
+                            fontSize = 12.sp
+                        )
+                        v.detail.forEach { k ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Clé #${k.index}", color = WineColors.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    if (k.rateLimited) "rate-limit" else k.lastStatus,
+                                    color = if (k.rateLimited) WineColors.error else if (k.lastStatus == "ok") WineColors.ok else WineColors.muted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            k.lastError?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, color = WineColors.muted, fontSize = 10.sp, maxLines = 2)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
                     Text("Référentiels", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Couleurs", "Arômes", "Régions").forEachIndexed { i, lab ->
+                        listOf("Cépages", "Arômes", "Régions").forEachIndexed { i, lab ->
                             val on = refTab == i
                             Text(
                                 lab,
@@ -478,7 +509,7 @@ fun AdminSheet(vm: AppViewModel) {
                     val list = when (refTab) {
                         1 -> refs.flavors.orEmpty()
                         2 -> refs.regions.orEmpty()
-                        else -> refs.colors.orEmpty()
+                        else -> (refs.grapes ?: refs.colors).orEmpty()
                     }.filter {
                         refFilter.isBlank() || it.name.contains(refFilter, ignoreCase = true)
                     }

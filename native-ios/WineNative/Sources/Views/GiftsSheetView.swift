@@ -116,11 +116,7 @@ struct GiftsSheetView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 4) {
-                    Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.starOff)
-                        .overlay(alignment: .leading) {
-                            Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.star)
-                                .mask { Rectangle().frame(width: WineFormatters.starFillWidth(g.rating ?? 0)) }
-                        }
+                    WeenoStarBar(rating: g.rating ?? 0, size: 11)
                     Text(WineFormatters.ratingLabel(g.rating ?? 0))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.accent)

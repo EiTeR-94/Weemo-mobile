@@ -340,7 +340,7 @@ struct WeenoAdminReferentialsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                refTabButton("Couleurs (\(colors.count))", index: 0)
+                refTabButton("Cépages (\(colors.count))", index: 0)
                 refTabButton("Arômes (\(flavors.count))", index: 1)
                 refTabButton("Régions (\(regions.count))", index: 2)
             }

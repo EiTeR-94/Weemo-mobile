@@ -160,11 +160,7 @@ struct HistorySheetView: View {
                             }
                         }
                         HStack(spacing: 4) {
-                            Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.starOff)
-                                .overlay(alignment: .leading) {
-                                    Text("★★★★★").font(.system(size: 11)).foregroundStyle(Theme.star)
-                                        .mask { Rectangle().frame(width: WineFormatters.starFillWidth(item.rating)) }
-                                }
+                            WeenoStarBar(rating: item.rating, size: 11)
                             Text(WineFormatters.ratingLabel(item.rating))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(Theme.accent)

@@ -352,23 +352,26 @@ fun WeenoGiftsFiltersRow(
     }
 }
 
-/** Étoiles + note (détail check-in). */
+/** Étoiles + note (détail check-in / historique). */
 @Composable
 fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier) {
+    val r = rating.coerceIn(0.0, 5.0)
+    val full = kotlin.math.floor(r).toInt().coerceIn(0, 5)
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Approximation visuelle (5 étoiles + note chiffrée)
-        val filled = (rating / 5.0 * 5).toInt().coerceIn(0, 5)
+        for (i in 0 until 5) {
+            Text(
+                text = if (i < full) "★" else "☆",
+                color = if (i < full) WineColors.star else WineColors.starOff,
+                fontSize = 14.sp
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         Text(
-            "★".repeat(filled) + "☆".repeat(5 - filled),
-            color = WineColors.star,
-            fontSize = 16.sp
-        )
-        Text(
-            formatRating(rating),
+            text = formatRating(r),
             color = WineColors.accent,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp
@@ -436,22 +439,30 @@ fun WeenoCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
 
 @Composable
 fun WeenoPreviewCard(product: WineProduct) {
-    WeenoCard {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(WineColors.card)
+            .border(2.dp, WineColors.ok, RoundedCornerShape(14.dp))
+            .padding(12.dp)
+    ) {
+        Text("✓ Sélectionné", color = WineColors.ok, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Spacer(Modifier.height(4.dp))
         Text(product.wineName, color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Spacer(Modifier.height(4.dp))
         Text(
             listOfNotNull(
                 product.producer.takeIf { it.isNotBlank() && it != "—" },
-                product.displayStyle.takeIf { it.isNotBlank() },
+                product.vintage?.toString(),
+                product.displayStyle.takeIf { it.isNotBlank() && it != "Unknown" },
+                product.region,
+                product.country,
                 product.abv?.let { String.format("%.1f%%", it) },
             ).joinToString(" · "),
             color = WineColors.muted,
             fontSize = 13.sp
         )
-        if (product.barcode.isNotBlank()) {
-            Text("EAN ${product.barcode}", color = WineColors.muted, fontSize = 12.sp)
-        }
-        // Parité web + iOS : résumé Vivino (description FR + note) sous la méta
         if (product.summary.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
             Text(

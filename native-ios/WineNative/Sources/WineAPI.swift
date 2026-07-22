@@ -985,14 +985,20 @@ final class WineAPI {
     func wishlist() async throws -> [WishlistItem] {
         let (data, http, _) = try await request(path: "/api/wishlist", method: "GET", body: nil)
         try throwIfUnauthorized(http.statusCode)
-        return (try? JSONDecoder().decode([WishlistItem].self, from: data)) ?? []
+        if let arr = try? JSONDecoder().decode([WishlistItem].self, from: data) { return arr }
+        if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let items = root["items"] as? [[String: Any]],
+           let raw = try? JSONSerialization.data(withJSONObject: items) {
+            return (try? JSONDecoder().decode([WishlistItem].self, from: raw)) ?? []
+        }
+        return []
     }
 
     func addWishlist(wineName: String, producer: String, style: String = "Unknown", barcode: String = "") async throws {
         let payload: [String: Any] = [
             "wine_name": wineName,
             "producer": producer,
-            "style": style,
+            "wine_color": style,
             "barcode": barcode,
         ]
         let body = try JSONSerialization.data(withJSONObject: payload)
@@ -1472,6 +1478,31 @@ final class WineAPI {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let arr = root["flavors"] as? [String] else { return [] }
         return arr
+    }
+
+    /// Statut scan étiquette / clés (admin) — sans afficher le fournisseur dans l'UI user.
+    func visionStatus() async throws -> VisionStatus {
+        let (data, http, _) = try await request(path: "/api/health", method: "GET", body: nil)
+        try throwIfUnauthorized(http.statusCode)
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let v = root["vision"] as? [String: Any] else {
+            return VisionStatus(available: false, keys: 0, detail: [])
+        }
+        let detailArr = v["gemini_keys_detail"] as? [[String: Any]] ?? []
+        let detail = detailArr.compactMap { d -> VisionKeyDetail? in
+            guard let idx = d["index"] as? Int ?? (d["index"] as? NSNumber)?.intValue else { return nil }
+            return VisionKeyDetail(
+                index: idx,
+                lastStatus: d["last_status"] as? String ?? "unknown",
+                rateLimited: d["rate_limited"] as? Bool ?? false,
+                lastError: d["last_error"] as? String
+            )
+        }
+        return VisionStatus(
+            available: v["available"] as? Bool ?? false,
+            keys: v["gemini_keys"] as? Int ?? detail.count,
+            detail: detail
+        )
     }
 
     func adminSetPassword(_ username: String, password: String) async throws {

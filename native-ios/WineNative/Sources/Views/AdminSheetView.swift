@@ -36,6 +36,7 @@ struct AdminSheetView: View {
     /// Parité webapp : Comptes / Invités / Outils
     @State private var adminTab: AdminMainTab = .accounts
     @State private var showRpgAdmin = false
+    @State private var vision: VisionStatus?
 
     private enum AdminMainTab: String, CaseIterable, Identifiable {
         case accounts, invites, tools
@@ -242,12 +243,13 @@ struct AdminSheetView: View {
                     catch let err { errorMessage = err.localizedDescription }
                 }
             }
+            visionStatusCard
         }
 
         WeenoAdminSub(title: "Référentiels")
         WeenoAdminReferentialsCard(
             tab: $refTab,
-            colors: referentials?.colors ?? [],
+            colors: referentials?.grapes ?? referentials?.colors ?? [],
             flavors: referentials?.flavors ?? [],
             regions: referentials?.regions ?? [],
             filter: $refFilter,
@@ -255,6 +257,60 @@ struct AdminSheetView: View {
             onAdd: { Task { await addReferential() } },
             onDelete: { entry in Task { await deleteReferential(entry) } }
         )
+    }
+
+    @ViewBuilder
+    private var visionStatusCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Scan étiquette (clés API)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            if let vision {
+                Text(vision.available
+                     ? "\(vision.keys) clé(s) configurée(s)"
+                     : "Scan IA non configuré")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                ForEach(vision.detail) { k in
+                    HStack {
+                        Text("Clé #\(k.index)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                        Spacer()
+                        if k.rateLimited {
+                            Text("rate-limit")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Theme.error)
+                        } else {
+                            Text(k.lastStatus)
+                                .font(.system(size: 11))
+                                .foregroundStyle(k.lastStatus == "ok" ? Theme.ok : Theme.muted)
+                        }
+                    }
+                    if let err = k.lastError, !err.isEmpty {
+                        Text(err)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.muted)
+                            .lineLimit(2)
+                    }
+                }
+            } else {
+                Text("Chargement…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+            }
+            Button("Rafraîchir statut") {
+                Task { vision = try? await app.api.visionStatus() }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Theme.accent)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.card)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .task { vision = try? await app.api.visionStatus() }
     }
 
     @ViewBuilder

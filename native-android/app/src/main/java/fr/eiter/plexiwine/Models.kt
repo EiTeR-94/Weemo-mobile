@@ -154,14 +154,18 @@ data class GiftIdea(
     @SerializedName("wine_name") val wineName: String = "",
     val producer: String? = null,
     val style: String? = null,
+    @SerializedName("wine_color") val wineColor: String? = null,
     val rating: Double? = null,
     val comment: String? = null,
     @SerializedName("photo_path") val photoPath: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("liked_by") val likedBy: String? = null,
+    val username: String? = null,
     @SerializedName("for") val forUser: String? = null
 ) {
-    val id: String get() = "$wineName-${likedBy.orEmpty()}-${createdAt.orEmpty()}"
+    val id: String get() = "$wineName-${resolvedLikedBy}-${createdAt.orEmpty()}"
+    val resolvedStyle: String? get() = style ?: wineColor
+    val resolvedLikedBy: String get() = likedBy ?: username.orEmpty()
 }
 
 data class CoupleStats(
