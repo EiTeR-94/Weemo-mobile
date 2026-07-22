@@ -3,8 +3,8 @@
 # Après release, le serveur Plexi tire l’IPA :
 #   timer wine-mobile-sync (à activer) ou manuel
 #   → /home/eiter/scripts/wine-mobile-sync-github.sh
-#   → /var/www/wine-mobile/WeenoBis.ipa + versions.json
-# Portail : https://eiter.freeboxos.fr/mobile/wine/
+#   → /var/www/wine-bis-mobile/WeenoBis.ipa + versions.json
+# Portail : https://eiter.freeboxos.fr/mobile/wine-bis/
 
 name: Build iOS IPA
 
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 45
 
     env:
-      WINE_SERVER_URL: https://eiter.freeboxos.fr/wine
+      WINE_SERVER_URL: https://eiter.freeboxos.fr/wine-bis
       CI: "true"
 
     steps:
@@ -71,7 +71,7 @@ jobs:
             Build automatique WeenoBis iOS.
 
             Le serveur Plexi synchronise cette release vers le portail :
-            https://eiter.freeboxos.fr/mobile/wine/
+            https://eiter.freeboxos.fr/mobile/wine-bis/
           files: |
             build/WeenoBis.ipa
           make_latest: true
@@ -79,4 +79,4 @@ jobs:
       - name: Rappel portail auto
         run: |
           echo "✅ Release ios-build-${{ github.run_number }} publiée sur GitHub."
-          echo "Portail : https://eiter.freeboxos.fr/mobile/wine/"
+          echo "Portail : https://eiter.freeboxos.fr/mobile/wine-bis/"

@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const base = (
-  process.env.WINE_SERVER_URL || "https://eiter.freeboxos.fr/wine"
+  process.env.WINE_SERVER_URL || "https://eiter.freeboxos.fr/wine-bis"
 ).trim().replace(/\/$/, "") + "/";
 
 const swift = `// Généré au build CI — NE PAS ÉDITER
