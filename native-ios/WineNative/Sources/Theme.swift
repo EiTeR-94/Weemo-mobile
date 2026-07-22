@@ -22,19 +22,20 @@ enum Theme {
         static let step: CGFloat = 999
     }
 
-    static let bg = Color(hex: 0x0f1419)
-    static let fieldBg = Color(hex: 0x0f1419)
-    static let card = Color(hex: 0x1a222c)
-    static let text = Color(hex: 0xf1f5f9)
-    static let muted = Color(hex: 0x94a3b8)
-    static let accent = Color(hex: 0xf59e0b)
-    static let accent2 = Color(hex: 0xd97706)
-    static let ok = Color(hex: 0x34d399)
-    static let border = Color(hex: 0x2d3a4a)
-    static let star = Color(hex: 0xfbbf24)
-    static let starOff = Color(hex: 0x475569)
-    static let photoBg = Color(hex: 0x0a0a0c)
-    static let btnPrimaryText = Color(hex: 0x1a1208)
+    // Palette webapp Weeno (style.css dark)
+    static let bg = Color(hex: 0x120a0e)
+    static let fieldBg = Color(hex: 0x120a0e)
+    static let card = Color(hex: 0x1c1016)
+    static let text = Color(hex: 0xf5e6e8)
+    static let muted = Color(hex: 0xa89a9e)
+    static let accent = Color(hex: 0xc45c7a)
+    static let accent2 = Color(hex: 0x8b1e3f)
+    static let ok = Color(hex: 0x6bbf8a)
+    static let border = Color(hex: 0x3d2430)
+    static let star = Color(hex: 0xe8c56a)
+    static let starOff = Color(hex: 0x5a4450)
+    static let photoBg = Color(hex: 0x0a0608)
+    static let btnPrimaryText = Color(hex: 0xfff5f7)
     static let error = Color(hex: 0xf87171)
 
     static var primaryGradient: LinearGradient {

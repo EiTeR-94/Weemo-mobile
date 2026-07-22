@@ -11,8 +11,8 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     INFOPLIST_FILE: WineNative/Resources/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: fr.eiter.plexiwine
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "11"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""
     CODE_SIGNING_ALLOWED: NO
@@ -30,9 +30,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      # Coque WebView uniquement (= webapp) — pas d'UI native Beer
-      - path: WineNative/Sources/WineNativeApp.swift
-      - path: WineNative/Sources/WeenoWebShellView.swift
+      - path: WineNative/Sources
+        excludes:
+          - WeenoWebShellView.swift
       - path: WineNative/Resources/Assets.xcassets
     entitlements:
       path: WineNative/Resources/WineNative.entitlements
@@ -41,6 +41,18 @@ targets:
         PRODUCT_NAME: Weeno
         GENERATE_INFOPLIST_FILE: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+
+  WineNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WineNative/Tests
+    dependencies:
+      - target: WineNative
+    settings:
+      base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Weeno.app/Weeno"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   WineNative:
@@ -51,3 +63,10 @@ schemes:
       config: Debug
     archive:
       config: Release
+  WineNativeTests:
+    build:
+      targets:
+        WineNativeTests: all
+    test:
+      targets:
+        - WineNativeTests
