@@ -426,7 +426,7 @@ final class WineAPI {
                 }
                 InviteSessionStore.save(
                     accessToken: decoded.accessToken!,
-                    user: decoded.resolvedUser ?? "invite",
+                    user: decoded.user ?? "invite",
                     label: decoded.label,
                     expiresAt: decoded.expiresAt,
                     deviceId: decoded.deviceId ?? deviceId,

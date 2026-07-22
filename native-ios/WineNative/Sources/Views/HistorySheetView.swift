@@ -304,7 +304,7 @@ struct HistorySheetView: View {
             app.hapticImpact()
             // local stats adjust
             if var s = stats {
-                stats = HistoryStats(total: max(0, s.total - 1), avgRating: s.avgRating, topStyles: s.topStyles, last: s.last)
+                stats = HistoryStats(total: max(0, s.total - 1), avgRating: s.avgRating, topStyles: s.topStyles, topColors: s.topColors, last: s.last)
             }
             app.objectWillChange.send()  // ensure header pending badge updates live
             return
@@ -317,7 +317,7 @@ struct HistorySheetView: View {
                 stats = live
                 app.cache.save(live, name: CacheKey.historyStats)
             } else if var s = stats {
-                stats = HistoryStats(total: max(0, s.total - 1), avgRating: s.avgRating, topStyles: s.topStyles, last: s.last)
+                stats = HistoryStats(total: max(0, s.total - 1), avgRating: s.avgRating, topStyles: s.topStyles, topColors: s.topColors, last: s.last)
             }
             // Theme 5: invalidate relevant cache entries
             app.cache.remove(name: CacheKey.historyCheckins)

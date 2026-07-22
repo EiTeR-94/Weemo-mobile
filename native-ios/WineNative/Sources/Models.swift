@@ -184,6 +184,14 @@ struct HistoryStats: Codable {
         case topColors = "top_colors"
     }
 
+    init(total: Int, avgRating: Double?, topStyles: [TopStyle]?, topColors: [TopStyle]? = nil, last: LastCheckin?) {
+        self.total = total
+        self.avgRating = avgRating
+        self.topStyles = topStyles
+        self.topColors = topColors
+        self.last = last
+    }
+
     struct TopStyle: Codable {
         let style: String?
         let color: String?
