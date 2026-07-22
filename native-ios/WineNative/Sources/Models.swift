@@ -147,21 +147,27 @@ struct CheckinItem: Identifiable, Codable, Hashable {
     let barcode: String?
     let createdAt: String?
     let photoURL: String?
+    let photoPath: String?
     let flavors: [String]?
     let hops: [String]?
     let hiddenFromPartner: Bool?
     let vivinoBid: Int?
-    /// Lieu / lien où la vin a été dégustée (optionnel).
+    /// Lieu / lien où le vin a été dégusté (optionnel).
     let location: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, producer, style, rating, comment, barcode, flavors, hops, location
+        case id, producer, rating, comment, barcode, flavors, hops, location
         case wineName = "wine_name"
+        case style = "wine_color"
         case createdAt = "created_at"
         case photoURL = "photo_url"
+        case photoPath = "photo_path"
         case hiddenFromPartner = "hidden_from_partner"
         case vivinoBid = "vivino_id"
     }
+
+    /// Weeno stocke `photo_path` (pas `photo_url` Beer).
+    var resolvedPhoto: String? { photoURL ?? photoPath }
 }
 
 struct HistoryStats: Codable {
