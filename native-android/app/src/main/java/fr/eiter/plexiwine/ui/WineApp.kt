@@ -1054,17 +1054,19 @@ private fun WeenoWizard(vm: AppViewModel) {
     val api = vm.api
 
     var product by remember { mutableStateOf<WineProduct?>(null) }
-    var scanStatus by remember { mutableStateOf("Cadre le code-barres dans le rectangle") }
+    var scanStatus by remember { mutableStateOf("Cadre l’étiquette — touche pour photo") }
     var busy by remember { mutableStateOf(false) }
+    var labelPhotoFile by remember { mutableStateOf<File?>(null) }
+    var vivinoQuery by remember { mutableStateOf("") }
     var vivinoProducer by remember { mutableStateOf("") }
-    var vivinoName by remember { mutableStateOf("") }
+    var vivinoVintage by remember { mutableStateOf("") }
     var vivinoResults by remember { mutableStateOf(listOf<VivinoHit>()) }
     var vivinoError by remember { mutableStateOf<String?>(null) }
     var showManual by remember { mutableStateOf(false) }
-    var showEanManual by remember { mutableStateOf(false) }
-    var manualEan by remember { mutableStateOf("") }
     var manualName by remember { mutableStateOf("") }
     var manualProducer by remember { mutableStateOf("") }
+    var manualVintage by remember { mutableStateOf("") }
+    var manualRegion by remember { mutableStateOf("") }
     var manualStyle by remember { mutableStateOf("") }
     var customStyle by remember { mutableStateOf("") }
     var styleOptions by remember { mutableStateOf(listOf<StyleOption>()) }
@@ -1110,74 +1112,38 @@ private fun WeenoWizard(vm: AppViewModel) {
             try {
                 val fh = api.flavors(product!!.displayStyle, product!!.summary)
                 flavorTags = (fh.suggestedFlavors ?: fh.flavors).orEmpty()
-                hopTags = (fh.suggestedHops ?: fh.hops).orEmpty()
+                hopTags = emptyList()
                 showFlavors = fh.showFlavorsBlock != false
-                showHops = fh.showHopsBlock != false
+                showHops = false // Weeno = arômes vin, pas houblons bière
             } catch (_: Exception) {
+                showHops = false
             }
         }
     }
 
     fun resetWizard() {
         product = null
-        scanStatus = "Cadre le code-barres dans le rectangle"
+        scanStatus = "Cadre l’étiquette — touche pour photo"
         photoFile = null
+        labelPhotoFile = null
         location = ""
         rating = 3f
         comment = ""
         flavors = emptySet()
         hops = emptySet()
+        vivinoQuery = ""
+        vivinoProducer = ""
+        vivinoVintage = ""
         vivinoResults = emptyList()
         vivinoError = null
-        manualEan = ""
         manualName = ""
         manualProducer = ""
+        manualVintage = ""
+        manualRegion = ""
         manualStyle = ""
         customStyle = ""
         vm.clearWizardPrefill()
         vm.wizardStep = 1
-    }
-
-    val eanLookupMutex = remember { Mutex() }
-
-    /** Lookup EAN après lecture live ou photo (mutex = pas de double lookup en cascade). */
-    suspend fun lookupScannedEan(rawCode: String, fromLive: Boolean) {
-        val digits = rawCode.filter { it.isDigit() }
-        if (digits.length < 8) {
-            scanStatus = "Code trop court"
-            return
-        }
-        if (!eanLookupMutex.tryLock()) return
-        busy = true
-        manualEan = digits
-        scanStatus = "Recherche…"
-        try {
-            val res = api.lookup(digits)
-            if (res.ok) {
-                product = res.asProduct(digits)
-                scanStatus = "Vin identifiée ✓"
-                vm.showToast(
-                    "Code-barres lu ✓",
-                    ToastPayload.Variant.SUCCESS,
-                    digits,
-                    label = if (fromLive) "Scan" else "Photo",
-                )
-            } else {
-                scanStatus = res.error ?: "Scanné $digits (introuvable)"
-                product = WineProduct(barcode = digits, wineName = "")
-                vm.showToast(
-                    "Code lu — introuvable",
-                    ToastPayload.Variant.WARN,
-                    digits,
-                    label = if (fromLive) "Scan" else "Photo",
-                )
-            }
-        } catch (e: Exception) {
-            scanStatus = e.message ?: "Erreur"
-        } finally {
-            busy = false
-            eanLookupMutex.unlock()
-        }
     }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -1187,48 +1153,35 @@ private fun WeenoWizard(vm: AppViewModel) {
         if (captureMode == "photo") {
             photoFile = f
             vm.showToast("Photo prête ✓", ToastPayload.Variant.SUCCESS)
-        } else {
-            scope.launch {
-                // busy coupe le live scan pendant le décodage photo
-                busy = true
-                scanStatus = "Décodage photo…"
-                var decoded: String? = null
-                var serverProduct: WineProduct? = null
-                var decodeError: String? = null
-                try {
-                    val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                    val mlCode = tryMlKitBarcode(context, f)?.filter { it.isDigit() }
-                    if (!mlCode.isNullOrBlank() && mlCode.length >= 8) {
-                        decoded = mlCode
-                    } else {
-                        val scan = api.scanPhoto(jpeg)
-                        if (scan.ok) {
-                            val digits = scan.barcode.orEmpty().filter { it.isDigit() }
-                            if (digits.length >= 8) {
-                                decoded = digits
-                            } else {
-                                serverProduct = scan.asProduct(digits)
-                            }
-                        } else {
-                            decodeError = scan.error ?: "Code illisible"
-                        }
-                    }
-                } catch (e: Exception) {
-                    decodeError = e.message ?: "Erreur scan"
-                } finally {
-                    busy = false
-                    try { f.delete() } catch (_: Exception) {}
+            return@rememberLauncherForActivityResult
+        }
+        // Mode scan = photo d'étiquette Weeno (label-scan IA + Vivino)
+        labelPhotoFile = f
+        scope.launch {
+            busy = true
+            scanStatus = "Analyse de l’étiquette…"
+            try {
+                val jpeg = ImageUtils.compressJPEG(f.readBytes())
+                val scan = api.scanPhoto(jpeg)
+                if (scan.ok && !scan.wineName.isNullOrBlank()) {
+                    product = scan.asProduct(scan.barcode.orEmpty())
+                    scanStatus = "Vin identifié ✓"
+                    vm.showToast("Vin identifié ✓", ToastPayload.Variant.SUCCESS, label = "Étiquette")
+                } else if (scan.ok) {
+                    if (!scan.wineName.isNullOrBlank()) manualName = scan.wineName!!
+                    if (!scan.producer.isNullOrBlank()) manualProducer = scan.producer!!
+                    val c = scan.styleFr ?: scan.style
+                    if (!c.isNullOrBlank()) manualStyle = c
+                    showManual = true
+                    scanStatus = "Étiquette lue — complète ou cherche sur Vivino"
+                    vm.showToast("Complète le vin", ToastPayload.Variant.INFO)
+                } else {
+                    scanStatus = scan.error ?: "Étiquette non reconnue"
                 }
-
-                when {
-                    decoded != null -> lookupScannedEan(decoded!!, fromLive = false)
-                    serverProduct != null -> {
-                        product = serverProduct
-                        scanStatus = "Vin identifiée ✓"
-                        vm.showToast("Code-barres lu ✓", ToastPayload.Variant.SUCCESS)
-                    }
-                    decodeError != null -> scanStatus = decodeError!!
-                }
+            } catch (e: Exception) {
+                scanStatus = e.message ?: "Erreur scan"
+            } finally {
+                busy = false
             }
         }
     }
@@ -1240,7 +1193,7 @@ private fun WeenoWizard(vm: AppViewModel) {
             return
         }
         try {
-            val dir = File(context.cacheDir, "beer").apply { mkdirs() }
+            val dir = File(context.cacheDir, "wine").apply { mkdirs() }
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val f = File(dir, "${mode}_$ts.jpg")
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", f)
@@ -1251,7 +1204,6 @@ private fun WeenoWizard(vm: AppViewModel) {
         }
     }
 
-    /** pendingCamAction: null = live only, "scan"|"photo" = open still camera after grant */
     var pendingCamAction by remember { mutableStateOf<String?>(null) }
 
     val camPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -1265,7 +1217,6 @@ private fun WeenoWizard(vm: AppViewModel) {
         if (action == "scan" || action == "photo") {
             launchCamera(action)
         }
-        // sinon : scan live s'active tout seul via recomposition
     }
 
     fun ensureCamera(mode: String) {
@@ -1275,19 +1226,6 @@ private fun WeenoWizard(vm: AppViewModel) {
         } else {
             pendingCamAction = mode
             camPerm.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    fun ensureLiveCameraPermission() {
-        if (hasCameraPermission) return
-        pendingCamAction = null
-        camPerm.launch(Manifest.permission.CAMERA)
-    }
-
-    // Demande caméra dès l'étape scan (comme iOS)
-    LaunchedEffect(vm.wizardStep) {
-        if (vm.wizardStep == 1 && !hasCameraPermission) {
-            ensureLiveCameraPermission()
         }
     }
 
@@ -1355,100 +1293,100 @@ private fun WeenoWizard(vm: AppViewModel) {
     ) {
         when (vm.wizardStep) {
             1 -> {
-                WeenoLead("Scan EAN optionnel — ou cherche directement sur Vivino.")
+                WeenoLead("Scan d’étiquette ou recherche Vivino.")
 
-                // Scan live auto (parité iOS) + bouton photo secours
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(260.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(WineColors.photoBg)
-                        .border(1.dp, WineColors.border, RoundedCornerShape(16.dp))
-                ) {
-                    if (hasCameraPermission) {
-                        LiveBarcodeScanner(
-                            enabled = !busy && vm.wizardStep == 1,
-                            onCode = { code ->
-                                scope.launch { lookupScannedEan(code, fromLive = true) }
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .clickable { ensureLiveCameraPermission() },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text("📷", fontSize = 32.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Autoriser la caméra pour le scan auto",
-                                color = WineColors.muted,
-                                fontSize = 13.sp,
+                WeenoCard {
+                    Text("Scan d’étiquette", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(WineColors.photoBg)
+                            .border(1.dp, WineColors.border, RoundedCornerShape(16.dp))
+                            .clickable { ensureCamera("scan") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (labelPhotoFile != null) {
+                            AsyncImage(
+                                model = labelPhotoFile,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().padding(8.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🍾", fontSize = 36.sp)
+                                Spacer(Modifier.height(6.dp))
+                                Text("Cadre l’étiquette", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                                Text("touche pour prendre une photo", color = WineColors.muted, fontSize = 12.sp)
+                            }
+                        }
+                        if (busy) {
+                            CircularProgressIndicator(
+                                Modifier.align(Alignment.TopEnd).padding(12.dp).size(22.dp),
+                                color = WineColors.accent,
+                                strokeWidth = 2.dp,
                             )
                         }
                     }
-
-                    // Bouton photo (fallback comme iOS « Prendre photo »)
-                    OutlinedButton(
-                        onClick = { ensureCamera("scan") },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = WineColors.card.copy(alpha = 0.92f),
-                            contentColor = WineColors.text,
-                        ),
-                        border = BorderStroke(1.dp, WineColors.border),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                    ) {
-                        Text("Prendre photo", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    if (busy) {
-                        CircularProgressIndicator(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(22.dp),
-                            color = WineColors.accent,
-                            strokeWidth = 2.dp,
-                        )
+                    Spacer(Modifier.height(6.dp))
+                    Text(scanStatus, color = WineColors.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
+                    if (labelPhotoFile != null && !busy) {
+                        Spacer(Modifier.height(8.dp))
+                        WeenoPrimaryButton("Lancer le scan") {
+                            val f = labelPhotoFile ?: return@WeenoPrimaryButton
+                            scope.launch {
+                                busy = true
+                                scanStatus = "Analyse de l’étiquette…"
+                                try {
+                                    val jpeg = ImageUtils.compressJPEG(f.readBytes())
+                                    val scan = api.scanPhoto(jpeg)
+                                    if (scan.ok && !scan.wineName.isNullOrBlank()) {
+                                        product = scan.asProduct(scan.barcode.orEmpty())
+                                        scanStatus = "Vin identifié ✓"
+                                        vm.showToast("Vin identifié ✓", ToastPayload.Variant.SUCCESS)
+                                    } else {
+                                        scanStatus = scan.error ?: "Étiquette non reconnue"
+                                    }
+                                } catch (e: Exception) {
+                                    scanStatus = e.message ?: "Erreur"
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
                     }
                 }
-                Text(
-                    scanStatus,
-                    color = WineColors.muted,
-                    fontSize = 13.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
 
                 WeenoCard {
                     Text("Chercher sur Vivino", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Top 5 résultats. Utilise Producteur + Nom pour affiner.",
+                        "Max 5 suggestions (le 1er est souvent le bon).",
                         color = WineColors.muted,
                         fontSize = 12.sp
                     )
                     Spacer(Modifier.height(8.dp))
-                    WeenoField("Producteur (optionnel)", vivinoProducer, { vivinoProducer = it }, "ex. Les Intenables")
+                    WeenoField("Domaine, cuvée…", vivinoQuery, { vivinoQuery = it }, "ex. Bachelet Saint-Aubin Le Charmois")
                     Spacer(Modifier.height(6.dp))
-                    WeenoField("Nom de la vin", vivinoName, { vivinoName = it }, "ex. Mama Whipa")
+                    WeenoField("Producteur", vivinoProducer, { vivinoProducer = it }, "ex. Domaine Nicolas")
+                    Spacer(Modifier.height(6.dp))
+                    WeenoField("Millésime", vivinoVintage, { vivinoVintage = it }, "2019", KeyboardType.Number)
                     Spacer(Modifier.height(8.dp))
                     WeenoPrimaryButton(
                         title = if (busy) "Recherche…" else "Chercher sur Vivino",
-                        enabled = vivinoName.length >= 2 || vivinoProducer.length >= 2,
+                        enabled = vivinoQuery.trim().length >= 2 || vivinoProducer.trim().length >= 2,
                         busy = busy
                     ) {
                         scope.launch {
                             busy = true
                             vivinoError = null
                             try {
-                                val q = listOf(vivinoProducer, vivinoName).filter { it.isNotBlank() }.joinToString(" ")
+                                val q = listOf(vivinoQuery, vivinoProducer, vivinoVintage)
+                                    .map { it.trim() }
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" ")
                                 val resp = api.searchVivino(q)
                                 vivinoResults = resp.results.orEmpty()
                                 if (vivinoResults.isEmpty()) vivinoError = resp.error ?: "Aucun résultat"
@@ -1483,33 +1421,20 @@ private fun WeenoWizard(vm: AppViewModel) {
                                             } else WineProduct(
                                                 wineName = hit.wineName,
                                                 producer = hit.producer.orEmpty(),
-                                                style = hit.styleFr ?: "Unknown",
+                                                style = hit.styleFr ?: "autre",
                                                 vivinoId = hit.bid
                                             )
-                                            // Link EAN ↔ Vivino when we already scanned a barcode (iOS linkProduct)
-                                            val bc = product?.barcode?.filter { it.isDigit() }.orEmpty()
-                                            if (bc.length >= 8) {
-                                                try {
-                                                    api.linkProduct(
-                                                        bid = hit.bid,
-                                                        barcode = bc,
-                                                        wineName = product!!.wineName,
-                                                        producer = product!!.producer
-                                                    )
-                                                } catch (_: Exception) {
-                                                }
-                                            }
                                             scanStatus = "Vivino ✓"
                                             vivinoResults = emptyList()
-                                            vm.showToast("Vin sélectionnée ✓", ToastPayload.Variant.SUCCESS)
+                                            vm.showToast("Vin sélectionné ✓", ToastPayload.Variant.SUCCESS)
                                         } catch (e: Exception) {
                                             product = WineProduct(
                                                 wineName = hit.wineName,
                                                 producer = hit.producer.orEmpty(),
-                                                style = hit.styleFr ?: "Unknown",
+                                                style = hit.styleFr ?: "autre",
                                                 vivinoId = hit.bid
                                             )
-                                            scanStatus = "Vivino ✓ (sans fetch)"
+                                            scanStatus = "Vivino ✓"
                                             vivinoResults = emptyList()
                                         } finally {
                                             busy = false
@@ -1541,7 +1466,6 @@ private fun WeenoWizard(vm: AppViewModel) {
                     }
                 }
 
-                // Manual entry
                 WeenoCard {
                     Text(
                         if (showManual) "▼ Saisie manuelle (secours)" else "▶ Saisie manuelle (secours)",
@@ -1550,75 +1474,41 @@ private fun WeenoWizard(vm: AppViewModel) {
                     )
                     if (showManual) {
                         Spacer(Modifier.height(8.dp))
-                        WeenoField("Nom de la vin", manualName, { manualName = it })
+                        WeenoField("Nom / cuvée *", manualName, { manualName = it }, "ex. Saint-Aubin 1er Cru…")
                         Spacer(Modifier.height(6.dp))
-                        WeenoField("Producteur", manualProducer, { manualProducer = it })
+                        WeenoField("Producteur", manualProducer, { manualProducer = it }, "ex. Domaine Nicolas")
                         Spacer(Modifier.height(6.dp))
-                        WeenoField("Style", manualStyle, { manualStyle = it }, "ex. IPA")
+                        WeenoField("Année / millésime", manualVintage, { manualVintage = it }, "2019", KeyboardType.Number)
+                        Spacer(Modifier.height(6.dp))
+                        WeenoField("Couleur", manualStyle, { manualStyle = it }, "rouge / blanc / rosé…")
                         if (styleOptions.isNotEmpty()) {
-                            Text("Styles serveur: tape le nom exact ou libre", color = WineColors.muted, fontSize = 11.sp)
+                            Text(
+                                "Couleurs: " + styleOptions.joinToString { it.label },
+                                color = WineColors.muted,
+                                fontSize = 11.sp
+                            )
                         }
+                        Spacer(Modifier.height(6.dp))
+                        WeenoField("Région", manualRegion, { manualRegion = it }, "ex. Bourgogne…")
                         Spacer(Modifier.height(8.dp))
-                        WeenoSecondaryButton("Continuer") {
+                        WeenoSecondaryButton("Continuer sans Vivino") {
                             if (manualName.isBlank()) {
-                                vm.showToast("Nom requis", ToastPayload.Variant.WARN)
+                                vm.showToast("Nom / cuvée requis", ToastPayload.Variant.WARN)
                             } else {
-                                val p = WineProduct(
+                                val color = manualStyle.ifBlank { "autre" }
+                                val summary = listOf(manualVintage, manualRegion)
+                                    .map { it.trim() }
+                                    .filter { it.isNotEmpty() }
+                                    .joinToString(" · ")
+                                product = WineProduct(
                                     wineName = manualName.trim(),
-                                    producer = manualProducer.trim(),
-                                    style = manualStyle.ifBlank { "Unknown" },
-                                    barcode = manualEan.filter { it.isDigit() }
+                                    producer = manualProducer.trim().ifBlank { "—" },
+                                    style = color,
+                                    styleFr = color,
+                                    summary = summary
                                 )
-                                product = p
                                 scanStatus = "Saisie manuelle ✓"
-                                // Persist product for future EAN lookup (iOS saveProduct)
-                                if (p.barcode.length >= 8) {
-                                    scope.launch {
-                                        try {
-                                            api.saveProduct(p.barcode, p.wineName, p.producer, p.style)
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                WeenoCard {
-                    Text(
-                        if (showEanManual) "▼ Code illisible ? Saisie EAN" else "▶ Code illisible ? Saisie EAN",
-                        color = WineColors.muted,
-                        modifier = Modifier.clickable { showEanManual = !showEanManual }
-                    )
-                    if (showEanManual) {
-                        Spacer(Modifier.height(8.dp))
-                        WeenoField("Code EAN", manualEan, { manualEan = it }, "ex. 5411680001111", KeyboardType.Number)
-                        Spacer(Modifier.height(8.dp))
-                        WeenoSecondaryButton("Identifier par EAN") {
-                            scope.launch {
-                                val digits = manualEan.filter { it.isDigit() }
-                                if (digits.length < 8) {
-                                    scanStatus = "Code trop court"
-                                    return@launch
-                                }
-                                busy = true
-                                scanStatus = "Recherche…"
-                                try {
-                                    val res = api.lookup(digits)
-                                    if (res.ok) {
-                                        product = res.asProduct(digits)
-                                        scanStatus = "Vin identifiée ✓"
-                                        vm.showToast("Vin identifiée ✓", ToastPayload.Variant.SUCCESS)
-                                    } else {
-                                        scanStatus = res.error ?: "Introuvable"
-                                        product = WineProduct(barcode = digits)
-                                    }
-                                } catch (e: Exception) {
-                                    scanStatus = e.message ?: "Erreur"
-                                } finally {
-                                    busy = false
-                                }
+                                vm.wizardStep = 2
                             }
                         }
                     }
@@ -1626,6 +1516,11 @@ private fun WeenoWizard(vm: AppViewModel) {
 
                 product?.takeIf { it.wineName.isNotBlank() }?.let { p ->
                     WeenoPreviewCard(p)
+                    WeenoSecondaryButton("Changer de vin") {
+                        product = null
+                        labelPhotoFile = null
+                        scanStatus = "Cadre l’étiquette — touche pour photo"
+                    }
                     WeenoSecondaryButton("+ Ajouter à la liste « À boire »") {
                         scope.launch {
                             try {
@@ -1641,7 +1536,7 @@ private fun WeenoWizard(vm: AppViewModel) {
             }
 
             2 -> {
-                WeenoLead("Photo du verre (optionnel) et lieu de dégustation.")
+                WeenoLead("Photo du verre / bouteille et lieu.")
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -1700,7 +1595,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                 if (p != null && p.wineName.isNotBlank()) {
                     WeenoLead(p.wineName)
                 } else {
-                    WeenoLead("Pas de vin identifiée — retourne à l'étape 1.")
+                    WeenoLead("Pas de vin identifié — retourne à l’étape 1.")
                 }
 
                 WeenoCard {

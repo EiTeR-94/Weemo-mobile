@@ -7,19 +7,21 @@ struct WineWizardView: View {
     private var prefill: WineProduct? { app.wizardProduct }
 
     @State private var scannedCode = ""
-    @State private var manualEAN = ""
     @State private var product: WineProduct?
-    @State private var scanStatus = "Cadre le code-barres dans le rectangle"
+    @State private var scanStatus = "Cadre l’étiquette — touche pour photo"
     @State private var busy = false
+    @State private var labelPreview: UIImage?
 
+    @State private var vivinoQuery = ""
     @State private var vivinoProducer = ""
-    @State private var vivinoName = ""
+    @State private var vivinoVintage = ""
     @State private var vivinoResults: [VivinoHit] = []
     @State private var vivinoError: String?
     @State private var showManual = false
-    @State private var showEANManual = false
     @State private var manualName = ""
     @State private var manualProducer = ""
+    @State private var manualVintage = ""
+    @State private var manualRegion = ""
     @State private var styleOptions: [StyleOption] = []
     @State private var manualStyle = ""
     @State private var customStyle = ""
@@ -28,7 +30,7 @@ struct WineWizardView: View {
     @State private var showTastingCamera = false
     @State private var photoData: Data?
     @State private var photoPreview: UIImage?
-    /// Lieu / lien où la vin a été dégustée (optionnel) — saisi à l'étape Photo.
+    /// Lieu / lien où le vin a été dégusté (optionnel) — saisi à l'étape Photo.
     @State private var location = ""
 
     @State private var rating = 3.0
@@ -101,65 +103,76 @@ struct WineWizardView: View {
         }
     }
 
-    // MARK: - Step 1
+    // MARK: - Step 1 (parité webapp Weeno)
 
     private var stepWeeno: some View {
         Group {
-            WeenoLead(text: "Scan EAN optionnel — ou cherche directement sur Vivino.")
+            WeenoLead(text: "Scan d’étiquette ou recherche Vivino.")
 
-            VStack(spacing: 0) {
-                ZStack(alignment: .bottom) {
-                    BarcodeScannerView { code in
-                        scannedCode = code
-                        manualEAN = code
-                        app.showToast(
-                            "Code-barres lu ✓",
-                            variant: .success,
-                            detail: code,
-                            label: "Scan",
-                            durationMs: 2400
-                        )
-                        Task { await lookupEAN(code) }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Scan d’étiquette")
+                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Button { showScanCamera = true } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Theme.photoBg)
+                            .frame(minHeight: 180)
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border))
+                        if let labelPreview {
+                            Image(uiImage: labelPreview)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxHeight: 240)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .padding(8)
+                        } else {
+                            VStack(spacing: 8) {
+                                Text("🍾").font(.system(size: 36))
+                                Text("Cadre l’étiquette")
+                                    .font(.system(size: Theme.Font.lead, weight: .semibold))
+                                    .foregroundStyle(Theme.text)
+                                Text("touche pour prendre une photo")
+                                    .font(.system(size: Theme.Font.ghost))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                        }
                     }
-                    .frame(height: min(min((UIScreen.main.bounds.width - 32) * 0.75, UIScreen.main.bounds.height * 0.48), 320))
-                    .background(Theme.photoBg)
-                    .overlay {
-                        ScanViewfinderOverlay()
-                    }
-
-                    Button { showScanCamera = true } label: {
-                        Text("Prendre photo")
-                            .font(.system(size: Theme.Font.ghost, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(Theme.card.opacity(0.92))
-                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.btn).stroke(Theme.border))
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.btn))
-                    }
-                    .padding(.bottom, 14)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border))
-                .background(Theme.card)
+                .buttonStyle(.plain)
+                Text(scanStatus)
+                    .font(.system(size: Theme.Font.lead * 0.94))
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                if busy {
+                    ProgressView().tint(Theme.accent).frame(maxWidth: .infinity)
+                } else if labelPreview != nil {
+                    WeenoPrimaryButton(title: "Lancer le scan", disabled: false, busy: false) {
+                        if let img = labelPreview {
+                            Task { await processScanPhoto(img) }
+                        }
+                    }
+                }
             }
-
-            Text(scanStatus)
-                .font(.system(size: Theme.Font.lead * 0.94))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
+            .beerCard()
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Chercher sur Vivino")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Top 5 résultats seulement (limite Vivino dans le HTML). Utilise Producteur + Nom pour faire apparaître ta vin précise dans ces 5.")
+                Text("Max 5 suggestions (le 1er est souvent le bon).")
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
-                WeenoField(label: "Producteur (optionnel)", text: $vivinoProducer, placeholder: "ex. Les Intenables")
-                WeenoField(label: "Nom de la vin", text: $vivinoName, placeholder: "ex. Mama Whipa")
-                WeenoPrimaryButton(title: busy ? "Recherche…" : "Chercher sur Vivino", disabled: vivinoName.count < 2 && vivinoProducer.count < 2, busy: busy) {
+                WeenoField(label: "Domaine, cuvée…", text: $vivinoQuery, placeholder: "ex. Bachelet Saint-Aubin Le Charmois")
+                WeenoField(label: "Producteur", text: $vivinoProducer, placeholder: "ex. Domaine Nicolas")
+                WeenoField(label: "Millésime", text: $vivinoVintage, placeholder: "2019", keyboard: .numberPad)
+                WeenoPrimaryButton(
+                    title: busy ? "Recherche…" : "Chercher sur Vivino",
+                    disabled: vivinoQuery.trimmingCharacters(in: .whitespaces).count < 2
+                        && vivinoProducer.trimmingCharacters(in: .whitespaces).count < 2,
+                    busy: busy
+                ) {
                     Task { await searchVivino() }
                 }
 
@@ -169,7 +182,6 @@ struct WineWizardView: View {
                 ForEach(vivinoResults) { hit in
                     Button { Task { await selectVivino(hit) } } label: {
                         HStack(spacing: 10) {
-                            // Use AsyncImage for external Vivino labels to guarantee loading (bypasses custom homelab download path that had pinning/transport issues)
                             if let urlStr = hit.photoURL, let url = URL(string: urlStr) {
                                 AsyncImage(url: url) { phase in
                                     switch phase {
@@ -183,7 +195,7 @@ struct WineWizardView: View {
                                 }
                                 .frame(width: 44, height: 44)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .accessibilityLabel("Photo de la vin depuis Vivino")
+                                .accessibilityLabel("Photo du vin depuis Vivino")
                             } else {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(Theme.card)
@@ -206,19 +218,21 @@ struct WineWizardView: View {
                 }
 
                 DisclosureGroup("Saisie manuelle (secours)", isExpanded: $showManual) {
-                    WeenoField(label: "Nom de la vin", text: $manualName, placeholder: "ex. Mama Whipa")
-                    WeenoField(label: "Producteur", text: $manualProducer, placeholder: "ex. Les Intenables")
+                    WeenoField(label: "Nom / cuvée *", text: $manualName, placeholder: "ex. Saint-Aubin 1er Cru…")
+                    WeenoField(label: "Producteur", text: $manualProducer, placeholder: "ex. Domaine Nicolas")
+                    WeenoField(label: "Année / millésime", text: $manualVintage, placeholder: "2019", keyboard: .numberPad)
                     WeenoFormSelectField(
-                        label: "Style",
+                        label: "Couleur",
                         value: manualStyle,
                         options: manualStyleOptions,
                         onSelect: { manualStyle = $0 }
                     )
                     .padding(.top, 10)
                     if manualStyle == "__other__" {
-                        WeenoField(label: "Style", text: $customStyle, placeholder: "Ex: Gose, Table Weeno, etc.")
+                        WeenoField(label: "Couleur", text: $customStyle, placeholder: "ex. orange, fortifié…")
                     }
-                    WeenoSecondaryButton(title: "Continuer") {
+                    WeenoField(label: "Région", text: $manualRegion, placeholder: "ex. Saint-Aubin, Bourgogne…")
+                    WeenoSecondaryButton(title: "Continuer sans Vivino") {
                         Task { await saveManualProduct() }
                     }
                 }
@@ -228,19 +242,12 @@ struct WineWizardView: View {
             }
             .beerCard()
 
-            DisclosureGroup("Code illisible ? Saisie EAN à la main", isExpanded: $showEANManual) {
-                WeenoField(label: "Code EAN", text: $manualEAN, placeholder: "ex. 5411680001111", keyboard: .numberPad)
-                WeenoSecondaryButton(title: "Identifier par EAN") {
-                    Task { await lookupEAN(manualEAN) }
-                }
-            }
-            .font(.system(size: Theme.Font.field))
-            .foregroundStyle(Theme.muted)
-            .tint(Theme.accent)
-
             if let product, !product.wineName.isEmpty {
                 WeenoPreviewCard(product: product)
-                // (legacy comment removed)
+                WeenoSecondaryButton(title: "Changer de vin") {
+                    clearProduct()
+                    labelPreview = nil
+                }
                 WeenoSecondaryButton(title: "+ Ajouter à la liste « À boire »") {
                     Task { await addToWishlist(product) }
                 }
@@ -253,7 +260,7 @@ struct WineWizardView: View {
 
     private var stepPhoto: some View {
         Group {
-            WeenoLead(text: "Photo du verre (optionnel) et lieu de dégustation.")
+            WeenoLead(text: "Photo du verre / bouteille et lieu.")
 
             Button { showTastingCamera = true } label: {
                 ZStack {
@@ -319,7 +326,7 @@ struct WineWizardView: View {
             if let product, !product.wineName.isEmpty {
                 WeenoLead(text: product.wineName)
             } else {
-                WeenoLead(text: "Pas de vin identifiée — retourne à l'étape 1 ou cherche sur Vivino.")
+                WeenoLead(text: "Pas de vin identifié — retourne à l’étape 1 ou cherche sur Vivino.")
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -411,63 +418,29 @@ struct WineWizardView: View {
 
     // MARK: - Actions
 
-    private func lookupEAN(_ code: String) async {
-        let digits = code.filter(\.isNumber)
-        guard digits.count >= 8 else {
-            scanStatus = "Code trop court"
-            app.showToast("Code-barres trop court", variant: .warn)
-            return
-        }
-        busy = true
-        scanStatus = "Recherche…"
-        defer { busy = false }
-
-        if app.networkStatus != .online {
-            scannedCode = digits
-            scanStatus = "Hors ligne — saisie manuelle ou Vivino"
-            return
-        }
-
-        do {
-            let res = try await app.api.lookup(barcode: digits)
-            if res.ok {
-                product = res.asProduct(fallbackBarcode: digits)
-                scanStatus = "Vin identifiée ✓"
-                app.showToast("Vin identifiée ✓", variant: .success)
-            } else {
-                product = nil
-                scannedCode = digits
-                scanStatus = res.error ?? "Introuvable"
-                app.showToast(res.error ?? "Vin introuvable", variant: .warn)
-            }
-        } catch let err {
-            scanStatus = err.localizedDescription
-        }
-    }
-
     private func processScanPhoto(_ image: UIImage) async {
+        labelPreview = image
         guard let raw = image.jpegData(compressionQuality: 0.92) else { return }
         let jpeg = WineImageUtils.compressJPEG(raw)
         busy = true
-        scanStatus = "Décodage photo…"
+        scanStatus = "Analyse de l’étiquette…"
         defer { busy = false }
         do {
             let scan = try await app.api.scanPhoto(jpeg: jpeg)
-            if scan.ok {
-                let digits = scan.barcode ?? ""
-                scannedCode = digits
-                manualEAN = digits
-                product = scan.asProduct(fallbackBarcode: digits)
-                scanStatus = "Vin identifiée ✓"
-                app.showToast(
-                    "Code-barres lu ✓",
-                    variant: .success,
-                    detail: digits.isEmpty ? nil : digits,
-                    label: "Scan photo",
-                    durationMs: 2400
-                )
+            if scan.ok, let name = scan.wineName, !name.isEmpty {
+                product = scan.asProduct(fallbackBarcode: scan.barcode ?? "")
+                scanStatus = "Vin identifié ✓"
+                app.showToast("Vin identifié ✓", variant: .success, label: "Étiquette", durationMs: 2400)
+            } else if scan.ok {
+                // champs IA partiels — préremplir saisie
+                if let n = scan.wineName, !n.isEmpty { manualName = n }
+                if let p = scan.producer, !p.isEmpty { manualProducer = p }
+                if let c = scan.styleFr ?? scan.style, !c.isEmpty { manualStyle = c }
+                showManual = true
+                scanStatus = "Étiquette lue — complète ou cherche sur Vivino"
+                app.showToast("Complète le vin", variant: .info)
             } else {
-                scanStatus = scan.error ?? "Code illisible"
+                scanStatus = scan.error ?? "Étiquette non reconnue"
             }
         } catch let err {
             scanStatus = err.localizedDescription
@@ -475,37 +448,37 @@ struct WineWizardView: View {
     }
 
     private func saveManualProduct() async {
-        let style = manualStyle == "__other__" ? (customStyle.isEmpty ? "Unknown" : customStyle) : (manualStyle.isEmpty ? "Unknown" : manualStyle)
-        let digits = manualEAN.filter(\.isNumber)
-        busy = true
-        defer { busy = false }
-        if digits.count >= 8, app.networkStatus == .online {
-            do {
-                let res = try await app.api.saveProduct(
-                    barcode: digits,
-                    wineName: manualName,
-                    producer: manualProducer.isEmpty ? "—" : manualProducer,
-                    style: style
-                )
-                product = res.asProduct(fallbackBarcode: digits)
-                scannedCode = digits
-                step = 2
-                return
-            } catch {
-                // fallback local
-            }
+        let name = manualName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            app.showToast("Nom / cuvée requis", variant: .warn)
+            return
+        }
+        let color = manualStyle == "__other__"
+            ? (customStyle.isEmpty ? "autre" : customStyle)
+            : (manualStyle.isEmpty ? "autre" : manualStyle)
+        var summary = ""
+        if !manualVintage.isEmpty { summary += manualVintage }
+        if !manualRegion.isEmpty {
+            if !summary.isEmpty { summary += " · " }
+            summary += manualRegion
         }
         product = WineProduct(
-            barcode: digits,
-            wineName: manualName,
+            barcode: "",
+            wineName: name,
             producer: manualProducer.isEmpty ? "—" : manualProducer,
-            style: style
+            style: color,
+            styleFr: color,
+            summary: summary
         )
+        scanStatus = "Saisie manuelle ✓"
         step = 2
     }
 
     private func searchVivino() async {
-        let q = [vivinoProducer, vivinoName].filter { !$0.isEmpty }.joined(separator: " ")
+        var parts = [vivinoQuery, vivinoProducer, vivinoVintage]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let q = parts.joined(separator: " ")
         guard q.count >= 2 else { return }
         busy = true
         vivinoError = nil
@@ -571,12 +544,15 @@ struct WineWizardView: View {
             flavorTags = n.flavors ?? []
             hopTags = n.hops ?? []
             showFlavors = n.showFlavorsBlock ?? true
-            showHops = n.showHopsBlock ?? true
+            // Weeno = arômes vin (pas de houblons bière)
+            showHops = false
+            hopTags = []
+            hops = []
             flavors = Set(n.suggestedFlavors ?? [])
-            hops = Set(n.suggestedHops ?? [])
         } catch {
             flavorTags = []
             hopTags = []
+            showHops = false
         }
     }
 
@@ -624,7 +600,7 @@ struct WineWizardView: View {
     private func clearProduct() {
         product = nil
         vivinoResults = []
-        scanStatus = "Cadre le code-barres dans le rectangle"
+        scanStatus = "Cadre l’étiquette — touche pour photo"
     }
 
     private func addToWishlist(_ product: WineProduct) async {
@@ -646,12 +622,15 @@ struct WineWizardView: View {
         step = 1
         product = nil
         scannedCode = ""
-        manualEAN = ""
+        labelPreview = nil
+        vivinoQuery = ""
         vivinoProducer = ""
-        vivinoName = ""
+        vivinoVintage = ""
         vivinoResults = []
         manualName = ""
         manualProducer = ""
+        manualVintage = ""
+        manualRegion = ""
         manualStyle = ""
         customStyle = ""
         photoData = nil
@@ -663,7 +642,7 @@ struct WineWizardView: View {
         hops = []
         customFlavorInput = ""
         customHopInput = ""
-        scanStatus = "Cadre le code-barres dans le rectangle"
+        scanStatus = "Cadre l’étiquette — touche pour photo"
         duplicateDetail = ""
     }
 }
