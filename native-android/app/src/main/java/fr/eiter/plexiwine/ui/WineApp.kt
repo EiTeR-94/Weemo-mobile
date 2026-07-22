@@ -1047,6 +1047,7 @@ private fun FeedbackDialog(
 
 // ───────────────────────── Wizard ─────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WeenoWizard(vm: AppViewModel) {
     val scope = rememberCoroutineScope()
@@ -1309,11 +1310,26 @@ private fun WeenoWizard(vm: AppViewModel) {
         )
     }
 
+    val wizardScroll = rememberScrollState()
+    val vivinoBringIntoView = remember { BringIntoViewRequester() }
+
+    // Quand des suggestions Vivino arrivent / clavier ouvert → ramener la zone résultats au-dessus de l’IME
+    LaunchedEffect(vivinoResults, vm.wizardStep) {
+        if (vm.wizardStep == 1 && vivinoResults.isNotEmpty()) {
+            kotlinx.coroutines.delay(80)
+            try {
+                vivinoBringIntoView.bringIntoView()
+            } catch (_: Exception) { /* ignore */ }
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .imePadding()
+            .verticalScroll(wizardScroll)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when (vm.wizardStep) {
@@ -1393,7 +1409,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                 WeenoCard {
                     Text("Chercher sur Vivino", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Tape — suggestions en direct (max 5).",
+                        "Tape — suggestions en direct (max 5). Le clavier ne les cache plus.",
                         color = WineColors.muted,
                         fontSize = 12.sp
                     )
@@ -1409,6 +1425,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                         }
                     }
                     vivinoError?.let { Text(it, color = WineColors.error, fontSize = 12.sp) }
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .bringIntoViewRequester(vivinoBringIntoView)
+                    ) {
                     vivinoResults.forEachIndexed { idx, hit ->
                         Row(
                             Modifier
@@ -1504,6 +1525,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                             }
                         }
                     }
+                    } // Column bringIntoViewRequester (suggestions au-dessus du clavier)
                 }
 
                 WeenoCard {

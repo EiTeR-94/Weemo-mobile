@@ -160,6 +160,8 @@ struct WeenoField: View {
     var placeholder = ""
     var keyboard: UIKeyboardType = .default
     var secure = false
+    /// Focus optionnel (ex. wizard Vivino pour scroller au-dessus du clavier)
+    var isFocused: FocusState<Bool>.Binding? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -174,6 +176,7 @@ struct WeenoField: View {
                         .keyboardType(keyboard)
                 }
             }
+            .modifier(OptionalBoolFocus(isFocused: isFocused))
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .padding(12)
@@ -181,6 +184,17 @@ struct WeenoField: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .foregroundStyle(Theme.text)
+        }
+    }
+}
+
+private struct OptionalBoolFocus: ViewModifier {
+    var isFocused: FocusState<Bool>.Binding?
+    func body(content: Content) -> some View {
+        if let isFocused {
+            content.focused(isFocused)
+        } else {
+            content
         }
     }
 }
