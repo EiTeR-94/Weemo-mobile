@@ -783,7 +783,8 @@ final class AppModel: ObservableObject {
                 location: pending.location ?? "",
                 vintage: product.vintage,
                 region: product.region ?? "",
-                country: product.country ?? ""
+                country: product.country ?? "",
+                grapes: product.grapes ?? []
             )
             if result.duplicate == true {
                 let pc = result.previousCheckin

@@ -817,6 +817,9 @@ class WineAPI private constructor(context: Context) {
             val sug = root.getAsJsonArray("suggested_flavors")?.mapNotNull {
                 try { it.asString } catch (_: Exception) { null }
             }
+            val grapes = o.getAsJsonArray("grapes")?.mapNotNull {
+                try { it.asString.trim().takeIf { s -> s.isNotEmpty() } } catch (_: Exception) { null }
+            }?.takeIf { it.isNotEmpty() }
             LookupResponse(
                 ok = true,
                 wineName = o.get("wine_name")?.asString ?: wineName.ifBlank { null },
@@ -828,10 +831,13 @@ class WineAPI private constructor(context: Context) {
                 photoURL = o.get("photo_url")?.asString,
                 source = "vivino-enrich",
                 barcode = barcode.ifBlank { null },
-                summary = listOfNotNull(o.get("region")?.asString, o.get("country")?.asString).joinToString(" · ")
-            ).also {
-                // vintage/region via product mapping in wizard from fields
-            }
+                summary = listOfNotNull(o.get("region")?.asString, o.get("country")?.asString).joinToString(" · "),
+                vintage = o.get("vintage")?.let { runCatching { it.asInt }.getOrNull() } ?: vintage,
+                region = o.get("region")?.asString,
+                country = o.get("country")?.asString,
+                grapes = grapes,
+                suggestedFlavors = sug
+            )
         } catch (_: Exception) {
             LookupResponse(ok = false, error = "decode", vivinoId = bid)
         }
@@ -1023,7 +1029,8 @@ class WineAPI private constructor(context: Context) {
         location: String = "",
         vintage: Int? = null,
         region: String = "",
-        country: String = ""
+        country: String = "",
+        grapes: List<String> = emptyList()
     ): CreateCheckinResult = withContext(Dispatchers.IO) {
         var photoPath: String? = null
         if (photoJPEG != null && photoJPEG.isNotEmpty()) {
@@ -1042,6 +1049,7 @@ class WineAPI private constructor(context: Context) {
                 } catch (_: Exception) {}
             }
         }
+        val cleanGrapes = grapes.map { it.trim() }.filter { it.isNotEmpty() }
         val payload = mutableMapOf<String, Any?>(
             "wine_name" to wineName,
             "producer" to producer,
@@ -1061,6 +1069,7 @@ class WineAPI private constructor(context: Context) {
         if (vintage != null && vintage > 0) payload["vintage"] = vintage
         if (region.isNotBlank()) payload["region"] = region.trim()
         if (country.isNotBlank()) payload["country"] = country.trim()
+        if (cleanGrapes.isNotEmpty()) payload["grapes"] = cleanGrapes
         val json = gson.toJson(payload)
         val req = requestBuilder("api/checkins").post(json.toRequestBody(JSON)).build()
         val (body, code) = execute(req)

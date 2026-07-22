@@ -47,6 +47,7 @@ data class WineProduct(
     var vintage: Int? = null,
     var region: String? = null,
     var country: String? = null,
+    var grapes: List<String>? = null,
     var suggestedFlavors: List<String>? = null
 ) {
     val displayStyle: String get() = styleFr ?: style
@@ -58,7 +59,8 @@ data class WineProduct(
             producer = item.producer ?: "—",
             style = item.style ?: "Unknown",
             summary = "${item.wineName} — re-dégustation",
-            vivinoId = item.vivinoId
+            vivinoId = item.vivinoId,
+            grapes = item.grapes
         )
 
         fun fromWishlist(item: WishlistItem) = WineProduct(
@@ -84,7 +86,12 @@ data class LookupResponse(
     val summary: String? = null,
     @SerializedName("vivino_id") val vivinoId: Int? = null,
     val source: String? = null,
-    @SerializedName("photo_url") val photoURL: String? = null
+    @SerializedName("photo_url") val photoURL: String? = null,
+    val vintage: Int? = null,
+    val region: String? = null,
+    val country: String? = null,
+    val grapes: List<String>? = null,
+    @SerializedName("suggested_flavors") val suggestedFlavors: List<String>? = null
 ) {
     fun asProduct(fallbackBarcode: String) = WineProduct(
         ok = ok,
@@ -97,7 +104,12 @@ data class LookupResponse(
         summary = summary.orEmpty(),
         vivinoId = vivinoId,
         source = source,
-        photoURL = photoURL
+        photoURL = photoURL,
+        vintage = vintage,
+        region = region,
+        country = country,
+        grapes = grapes,
+        suggestedFlavors = suggestedFlavors
     )
 }
 
@@ -113,6 +125,7 @@ data class CheckinItem(
     @SerializedName("photo_url") val photoURL: String? = null,
     @SerializedName("photo_path") val photoPath: String? = null,
     val flavors: List<String>? = null,
+    val grapes: List<String>? = null,
     val hops: List<String>? = null,
     @SerializedName("hidden_from_partner") val hiddenFromPartner: Boolean? = null,
     @SerializedName("vivino_id") val vivinoId: Int? = null,

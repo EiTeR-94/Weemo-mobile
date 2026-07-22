@@ -1605,6 +1605,19 @@ final class WineAPI {
         }
         let f = root["fields"] as? [String: Any] ?? root
         let suggested = root["suggested_flavors"] as? [String]
+        let grapes: [String]? = {
+            if let arr = f["grapes"] as? [String] {
+                let clean = arr.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                return clean.isEmpty ? nil : clean
+            }
+            if let arr = f["grapes"] as? [Any] {
+                let clean = arr.compactMap { $0 as? String }
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                return clean.isEmpty ? nil : clean
+            }
+            return nil
+        }()
         return LookupResponse(
             ok: true,
             error: nil,
@@ -1621,6 +1634,7 @@ final class WineAPI {
             vintage: Self.jsonInt(f["vintage"]) ?? vintage,
             region: f["region"] as? String,
             country: f["country"] as? String,
+            grapes: grapes,
             suggestedFlavors: suggested
         )
     }
@@ -1655,7 +1669,8 @@ final class WineAPI {
         location: String = "",
         vintage: Int? = nil,
         region: String = "",
-        country: String = ""
+        country: String = "",
+        grapes: [String] = []
     ) async throws -> CreateCheckinResult {
         // Weeno: JSON POST /api/checkins + photo optionnelle via /api/photo
         var photoPath: String? = nil
@@ -1696,6 +1711,8 @@ final class WineAPI {
         if !reg.isEmpty { payload["region"] = reg }
         let ctry = country.trimmingCharacters(in: .whitespacesAndNewlines)
         if !ctry.isEmpty { payload["country"] = ctry }
+        let cleanGrapes = grapes.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !cleanGrapes.isEmpty { payload["grapes"] = cleanGrapes }
         let json = try JSONSerialization.data(withJSONObject: payload)
         let (data, http, _) = try await request(
             path: "/api/checkins",

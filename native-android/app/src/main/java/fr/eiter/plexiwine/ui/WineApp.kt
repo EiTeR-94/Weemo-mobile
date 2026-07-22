@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -1079,14 +1080,11 @@ private fun WeenoWizard(vm: AppViewModel) {
     var location by remember { mutableStateOf("") }
     var rating by remember { mutableFloatStateOf(3f) }
     var comment by remember { mutableStateOf("") }
-    var flavors by remember { mutableStateOf(setOf<String>()) }
-    var hops by remember { mutableStateOf(setOf<String>()) }
-    var flavorTags by remember { mutableStateOf(listOf<String>()) }
-    var hopTags by remember { mutableStateOf(listOf<String>()) }
-    var showFlavors by remember { mutableStateOf(true) }
-    var showHops by remember { mutableStateOf(true) }
-    var customFlavor by remember { mutableStateOf("") }
-    var customHop by remember { mutableStateOf("") }
+    /** Ressenti libre arômes/saveurs → flavors[] */
+    var flavorNote by remember { mutableStateOf("") }
+    /** Cépages (souvent prérempli Vivino) */
+    var grapesNote by remember { mutableStateOf("") }
+    var grapesFromVivino by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var showDuplicate by remember { mutableStateOf(false) }
     var duplicateDetail by remember { mutableStateOf("") }
@@ -1132,17 +1130,20 @@ private fun WeenoWizard(vm: AppViewModel) {
 
     LaunchedEffect(vm.wizardStep, product) {
         if (vm.wizardStep == 3 && product != null) {
-            try {
-                hopTags = emptyList()
-                showFlavors = true
-                showHops = false
-                flavorTags = api.configFlavors()
-            } catch (_: Exception) {
-                showHops = false
-                flavorTags = emptyList()
+            val p = product!!
+            if (grapesNote.isBlank() && !p.grapes.isNullOrEmpty()) {
+                grapesNote = p.grapes!!.joinToString(", ")
+                grapesFromVivino = true
             }
         }
     }
+
+    fun splitTags(raw: String): List<String> =
+        raw.replace(';', ',')
+            .replace('\n', ',')
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
 
     fun resetWizard() {
         product = null
@@ -1152,8 +1153,9 @@ private fun WeenoWizard(vm: AppViewModel) {
         location = ""
         rating = 3f
         comment = ""
-        flavors = emptySet()
-        hops = emptySet()
+        flavorNote = ""
+        grapesNote = ""
+        grapesFromVivino = false
         vivinoQuery = ""
         vivinoProducer = ""
         vivinoVintage = ""
@@ -1363,11 +1365,15 @@ private fun WeenoWizard(vm: AppViewModel) {
         }
         saving = true
         try {
+            val grapes = splitTags(grapesNote)
+            val flavorsOut = splitTags(flavorNote)
+            val toSave = p.copy(grapes = grapes.ifEmpty { null })
+            product = toSave
             val msg = vm.saveCheckin(
-                product = p,
+                product = toSave,
                 rating = rating.toDouble(),
-                flavors = flavors.toList(),
-                hops = hops.toList(),
+                flavors = flavorsOut,
+                hops = emptyList(),
                 comment = comment,
                 photoFile = photoFile,
                 force = force,
@@ -1568,11 +1574,16 @@ private fun WeenoWizard(vm: AppViewModel) {
                                                         wineName = pr.wineName.ifBlank { hit.wineName },
                                                         producer = pr.producer.ifBlank { hit.producer.orEmpty() },
                                                         vivinoId = pr.vivinoId ?: hit.bid,
-                                                        vintage = hit.vintage ?: pr.let { null },
-                                                        region = hit.region,
-                                                        country = hit.country,
-                                                        photoURL = pr.photoURL ?: hit.photoURL
+                                                        vintage = pr.vintage ?: hit.vintage,
+                                                        region = pr.region ?: hit.region,
+                                                        country = pr.country ?: hit.country,
+                                                        photoURL = pr.photoURL ?: hit.photoURL,
+                                                        grapes = pr.grapes
                                                     )
+                                                    if (!pr.grapes.isNullOrEmpty()) {
+                                                        grapesNote = pr.grapes!!.joinToString(", ")
+                                                        grapesFromVivino = true
+                                                    }
                                                 }
                                             }
                                             scanStatus = "Vin prêt — continue vers la photo"
@@ -1785,28 +1796,117 @@ private fun WeenoWizard(vm: AppViewModel) {
                 var noteAbv by remember { mutableStateOf(product?.abv?.toString().orEmpty()) }
 
                 WeenoCard {
-                    Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
-                    Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.", color = WineColors.muted, fontSize = 11.sp)
+                    Text("Arômes / Saveurs", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Ton ressenti libre — nez, bouche, texture…",
+                        color = WineColors.muted,
+                        fontSize = 11.sp
+                    )
                     Spacer(Modifier.height(6.dp))
-                    if (flavorTags.isNotEmpty()) {
-                        WeenoTagDropdownField(
-                            label = "",
-                            tags = flavorTags,
-                            selected = flavors,
-                            maxCount = 8,
-                            suggested = product?.suggestedFlavors?.toSet().orEmpty()
-                        ) { tag ->
-                            flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
+                    OutlinedTextField(
+                        value = flavorNote,
+                        onValueChange = { if (it.length <= 400) flavorNote = it },
+                        placeholder = {
+                            Text(
+                                "ex. fruits rouges, minéral, tanins fins…",
+                                color = WineColors.muted.copy(alpha = 0.6f)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = WineColors.text,
+                            unfocusedTextColor = WineColors.text,
+                            focusedBorderColor = WineColors.accent,
+                            unfocusedBorderColor = WineColors.border,
+                            cursorColor = WineColors.accent,
+                            focusedContainerColor = WineColors.card,
+                            unfocusedContainerColor = WineColors.card
+                        )
+                    )
+                    Text(
+                        "${flavorNote.length}/400",
+                        color = WineColors.muted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                WeenoCard {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Cépages", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                        if (grapesFromVivino && grapesNote.isNotBlank()) {
+                            Text(
+                                "Vivino",
+                                color = Color.Black,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(WineColors.accent.copy(alpha = 0.9f))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        if (grapesFromVivino)
+                            "Renseigné depuis Vivino — tu peux corriger si besoin."
+                        else
+                            "Saisis les cépages si tu les connais (virgules pour plusieurs).",
+                        color = WineColors.muted,
+                        fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    val grapeChips = splitTags(grapesNote)
+                    if (grapeChips.isNotEmpty()) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            grapeChips.forEach { tag ->
+                                Text(
+                                    tag,
+                                    color = WineColors.text,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(WineColors.accent.copy(alpha = 0.14f))
+                                        .border(0.8.dp, WineColors.accent.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                     }
-                    CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
-                        val t = customFlavor.trim()
-                        if (t.isNotBlank() && flavors.size < 8) {
-                            flavors = flavors + t
-                            customFlavor = ""
-                        }
-                    }
+                    OutlinedTextField(
+                        value = grapesNote,
+                        onValueChange = { v ->
+                            grapesNote = v
+                            val fromProduct = product?.grapes.orEmpty().joinToString(", ")
+                            if (grapesFromVivino && v.trim() != fromProduct.trim()) {
+                                grapesFromVivino = false
+                            }
+                        },
+                        placeholder = {
+                            Text("ex. Pinot Noir, Chardonnay…", color = WineColors.muted.copy(alpha = 0.6f))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = WineColors.text,
+                            unfocusedTextColor = WineColors.text,
+                            focusedBorderColor = if (grapesFromVivino) WineColors.accent else WineColors.accent,
+                            unfocusedBorderColor = if (grapesFromVivino) WineColors.accent.copy(alpha = 0.45f) else WineColors.border,
+                            cursorColor = WineColors.accent,
+                            focusedContainerColor = WineColors.card,
+                            unfocusedContainerColor = WineColors.card
+                        )
+                    )
                 }
 
                 WeenoCard {
@@ -1895,7 +1995,8 @@ private fun WeenoWizard(vm: AppViewModel) {
                             styleFr = noteColor.ifBlank { product?.styleFr },
                             region = noteRegion.ifBlank { null },
                             country = noteCountry.ifBlank { null },
-                            abv = noteAbv.replace(',', '.').toDoubleOrNull() ?: product?.abv
+                            abv = noteAbv.replace(',', '.').toDoubleOrNull() ?: product?.abv,
+                            grapes = splitTags(grapesNote).ifEmpty { null }
                         )
                         doSave(force = false)
                     }

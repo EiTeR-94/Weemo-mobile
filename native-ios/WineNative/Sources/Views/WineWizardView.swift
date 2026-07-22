@@ -43,14 +43,11 @@ struct WineWizardView: View {
 
     @State private var rating = 3.0
     @State private var comment = ""
-    @State private var flavors = Set<String>()
-    @State private var hops = Set<String>()
-    @State private var customFlavorInput = ""
-    @State private var customHopInput = ""
-    @State private var flavorTags: [String] = []
-    @State private var hopTags: [String] = []
-    @State private var showFlavors = true
-    @State private var showHops = false
+    /// Ressenti libre (arômes / saveurs) — envoyé en flavors[]
+    @State private var flavorNote = ""
+    /// Cépages (souvent prérempli Vivino) — texte libre, séparés par virgules
+    @State private var grapesNote = ""
+    @State private var grapesFromVivino = false
     @State private var noteVintage = ""
     @State private var noteColor = ""
     @State private var noteRegion = ""
@@ -408,14 +405,7 @@ struct WineWizardView: View {
         }
     }
 
-    private var flavorTagsTitle: String {
-        guard let product,
-              !product.displayStyle.isEmpty,
-              product.displayStyle != "Unknown" else { return "Goûts" }
-        return "Goûts \(product.displayStyle)"
-    }
-
-    // MARK: - Step 3 (parité webapp Note)
+    // MARK: - Step 3 Note
 
     private var stepRating: some View {
         Group {
@@ -433,28 +423,78 @@ struct WineWizardView: View {
             }
             .beerCard()
 
+            // Ressenti libre (plus de chips presets)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Arômes & structure")
+                Text("Arômes / Saveurs")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.")
+                Text("Ton ressenti libre — nez, bouche, texture…")
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
-                if !flavorTags.isEmpty {
-                    WeenoTagDropdownField(
-                        label: "",
-                        tags: flavorTags,
-                        selected: $flavors,
-                        maxCount: 8,
-                        suggested: Set(product?.suggestedFlavors ?? [])
-                    )
+                TextField("ex. fruits rouges, minéral, tanins fins…", text: $flavorNote, axis: .vertical)
+                    .lineLimit(3...6)
+                    .onChange(of: flavorNote, perform: { v in
+                        if v.count > 400 { flavorNote = String(v.prefix(400)) }
+                    })
+                    .padding(10)
+                    .background(Theme.fieldBg)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(Theme.text)
+                Text("\(flavorNote.count)/400")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .beerCard()
+
+            // Cépages (Vivino si dispo)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Cépages")
+                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    if grapesFromVivino, !grapesNote.isEmpty {
+                        Text("Vivino")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.bg)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Theme.accent.opacity(0.9))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
                 }
-                CustomTagInput(
-                    placeholder: "ex. pierre chaude, salin…",
-                    input: $customFlavorInput,
-                    selected: $flavors,
-                    maxCount: 8
-                )
+                Text(grapesFromVivino
+                     ? "Renseigné depuis Vivino — tu peux corriger si besoin."
+                     : "Saisis les cépages si tu les connais (virgules pour plusieurs).")
+                    .font(.system(size: Theme.Font.lead * 0.94))
+                    .foregroundStyle(Theme.muted)
+
+                if !grapeChips.isEmpty {
+                    FlowGrapeChips(tags: grapeChips)
+                }
+
+                TextField("ex. Pinot Noir, Chardonnay…", text: $grapesNote, axis: .vertical)
+                    .lineLimit(1...3)
+                    .onChange(of: grapesNote, perform: { _ in
+                        // Saisie manuelle → plus purement « Vivino »
+                        if grapesFromVivino {
+                            let fromProduct = (product?.grapes ?? []).joined(separator: ", ")
+                            if grapesNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                                != fromProduct.trimmingCharacters(in: .whitespacesAndNewlines) {
+                                grapesFromVivino = false
+                            }
+                        }
+                    })
+                    .padding(10)
+                    .background(Theme.fieldBg)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(
+                        grapesFromVivino ? Theme.accent.opacity(0.45) : Theme.border,
+                        lineWidth: grapesFromVivino ? 1 : 0.5
+                    ))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(Theme.text)
             }
             .beerCard()
 
@@ -500,7 +540,7 @@ struct WineWizardView: View {
                         .font(.caption2)
                         .foregroundStyle(Theme.muted)
                 }
-                TextField("Nez, bouche, accord…", text: $comment, axis: .vertical)
+                TextField("Accord, moment, lieu… (optionnel)", text: $comment, axis: .vertical)
                     .lineLimit(2...4)
                     .onChange(of: comment, perform: { v in
                         if v.count > 500 { comment = String(v.prefix(500)) }
@@ -528,6 +568,23 @@ struct WineWizardView: View {
                 Task { await save(force: false) }
             }
         }
+    }
+
+    private var grapeChips: [String] {
+        Self.splitTags(grapesNote)
+    }
+
+    /// Découpe un champ libre en tags (virgule / point-virgule / saut de ligne).
+    private static func splitTags(_ raw: String) -> [String] {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let parts = trimmed
+            .replacingOccurrences(of: ";", with: ",")
+            .replacingOccurrences(of: "\n", with: ",")
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts
     }
 
     // MARK: - Actions
@@ -691,8 +748,9 @@ struct WineWizardView: View {
                 if p.wineName.isEmpty { p.wineName = hit.wineName }
                 if p.producer.isEmpty { p.producer = hit.producer ?? "—" }
                 product = p
-                if let sug = res.suggestedFlavors, !sug.isEmpty {
-                    flavors = Set(sug)
+                if let g = p.grapes, !g.isEmpty {
+                    grapesNote = g.joined(separator: ", ")
+                    grapesFromVivino = true
                 }
                 scanStatus = "Vin prêt — continue vers la photo"
                 app.showToast("Vin sélectionné ✓", variant: .success)
@@ -712,21 +770,6 @@ struct WineWizardView: View {
     }
 
     private func loadNotation() async {
-        showHops = false
-        hopTags = []
-        hops = []
-        showFlavors = true
-        // Tags prédéfinis depuis /api/config (+ déjà sélectionnés via enrichissement Vivino)
-        if app.networkStatus == .online {
-            do {
-                flavorTags = try await app.api.configFlavors()
-            } catch {
-                flavorTags = []
-            }
-        }
-        if flavors.isEmpty, let sug = product?.suggestedFlavors, !sug.isEmpty {
-            flavors = Set(sug)
-        }
         if let p = product {
             if noteVintage.isEmpty, let v = p.vintage { noteVintage = String(v) }
             if noteColor.isEmpty, let c = p.styleFr ?? (p.style != "Unknown" ? p.style : nil) {
@@ -735,6 +778,12 @@ struct WineWizardView: View {
             if noteRegion.isEmpty, let r = p.region { noteRegion = r }
             if noteCountry.isEmpty, let c = p.country { noteCountry = c }
             if noteAbv.isEmpty, let a = p.abv { noteAbv = String(a) }
+            // Cépages Vivino si pas déjà saisis
+            if grapesNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let g = p.grapes, !g.isEmpty {
+                grapesNote = g.joined(separator: ", ")
+                grapesFromVivino = true
+            }
         }
     }
 
@@ -749,14 +798,17 @@ struct WineWizardView: View {
         if !noteRegion.isEmpty { product.region = noteRegion }
         if !noteCountry.isEmpty { product.country = noteCountry }
         if let a = Double(noteAbv.replacingOccurrences(of: ",", with: ".")) { product.abv = a }
+        let grapes = Self.splitTags(grapesNote)
+        product.grapes = grapes.isEmpty ? nil : grapes
         self.product = product
+        let flavorsOut = Self.splitTags(flavorNote)
         saving = true
         defer { saving = false }
         do {
             let msg = try await app.saveCheckin(
                 product: product,
                 rating: rating,
-                flavors: Array(flavors),
+                flavors: flavorsOut,
                 hops: [],
                 comment: comment,
                 photoJPEG: photoData,
@@ -830,10 +882,9 @@ struct WineWizardView: View {
         location = ""
         rating = 3.0
         comment = ""
-        flavors = []
-        hops = []
-        customFlavorInput = ""
-        customHopInput = ""
+        flavorNote = ""
+        grapesNote = ""
+        grapesFromVivino = false
         noteVintage = ""
         noteColor = ""
         noteRegion = ""
@@ -841,5 +892,27 @@ struct WineWizardView: View {
         noteAbv = ""
         scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
         duplicateDetail = ""
+    }
+}
+
+// MARK: - Chips cépages (affichage compact)
+
+private struct FlowGrapeChips: View {
+    let tags: [String]
+    var body: some View {
+        // Simple wrap via LazyVGrid
+        let cols = [GridItem(.adaptive(minimum: 72), spacing: 6)]
+        LazyVGrid(columns: cols, alignment: .leading, spacing: 6) {
+            ForEach(tags, id: \.self) { t in
+                Text(t)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Theme.accent.opacity(0.14))
+                    .overlay(Capsule().stroke(Theme.accent.opacity(0.35), lineWidth: 0.8))
+                    .clipShape(Capsule())
+            }
+        }
     }
 }

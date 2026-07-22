@@ -105,10 +105,11 @@ struct LookupResponse: Decodable {
     let vintage: Int?
     let region: String?
     let country: String?
+    let grapes: [String]?
     let suggestedFlavors: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case ok, error, barcode, producer, style, abv, summary, source, vintage, region, country
+        case ok, error, barcode, producer, style, abv, summary, source, vintage, region, country, grapes
         case wineName = "wine_name"
         case styleFr = "wine_color"
         case vivinoBid = "vivino_id"
@@ -120,7 +121,7 @@ struct LookupResponse: Decodable {
         ok: Bool, error: String?, barcode: String?, wineName: String?, producer: String?,
         style: String?, styleFr: String?, abv: Double?, summary: String?, vivinoBid: Int?,
         source: String?, photoURL: String?, vintage: Int? = nil, region: String? = nil,
-        country: String? = nil, suggestedFlavors: [String]? = nil
+        country: String? = nil, grapes: [String]? = nil, suggestedFlavors: [String]? = nil
     ) {
         self.ok = ok
         self.error = error
@@ -137,6 +138,7 @@ struct LookupResponse: Decodable {
         self.vintage = vintage
         self.region = region
         self.country = country
+        self.grapes = grapes
         self.suggestedFlavors = suggestedFlavors
     }
 
@@ -156,6 +158,7 @@ struct LookupResponse: Decodable {
             vintage: vintage,
             region: region,
             country: country,
+            grapes: grapes,
             suggestedFlavors: suggestedFlavors
         )
     }
