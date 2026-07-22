@@ -67,8 +67,8 @@ struct InviteCheckinsSheetView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 Group {
-                    if item.photoURL != nil {
-                        WineImage(path: item.photoURL)
+                    if item.resolvedPhoto != nil {
+                        WineImage(path: item.resolvedPhoto)
                             .frame(width: 64, height: 64)
                             .scaledToFill()
                     } else {

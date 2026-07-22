@@ -85,7 +85,7 @@ struct GallerySheetView: View {
                                 for i in 1...prefetchCount {
                                     let nextIndex = index + i
                                     if nextIndex < withPhotos.count {
-                                        if let p = withPhotos[nextIndex].photoURL {
+                                        if let p = withPhotos[nextIndex].resolvedPhoto {
                                             WineImageLoader.prewarm(path: p, api: app.api)
                                         }
                                     }
@@ -229,7 +229,7 @@ private struct GalleryCell: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            WineImage(path: item.photoURL)
+            WineImage(path: item.resolvedPhoto)
                 .frame(maxWidth: .infinity)
                 .frame(height: 118)
                 .clipped()

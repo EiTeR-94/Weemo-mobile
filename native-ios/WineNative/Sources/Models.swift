@@ -2,15 +2,19 @@ import Foundation
 
 struct MeResponse: Decodable {
     let user: String?
+    let username: String?
     let auth: Bool?
     let isAdmin: Bool?
     let isInvite: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case user, auth
+        case user, username, auth
         case isAdmin = "is_admin"
         case isInvite = "is_invite"
     }
+
+    /// Backend Weeno renvoie `username` ; Beer renvoyait `user`.
+    var resolvedUser: String? { user ?? username }
 }
 
 struct LoginResponse: Decodable {
@@ -61,7 +65,7 @@ struct WineProduct: Codable, Equatable {
         case ok, barcode, producer, style, abv, summary, source
         case wineName = "wine_name"
         case styleFr = "wine_color"
-        case vivinoBid = "vivino_bid"
+        case vivinoBid = "vivino_id"
         case photoURL = "photo_url"
     }
 
@@ -97,8 +101,23 @@ struct LookupResponse: Decodable {
         case ok, error, barcode, producer, style, abv, summary, source
         case wineName = "wine_name"
         case styleFr = "wine_color"
-        case vivinoBid = "vivino_bid"
+        case vivinoBid = "vivino_id"
         case photoURL = "photo_url"
+    }
+
+    init(ok: Bool, error: String?, barcode: String?, wineName: String?, producer: String?, style: String?, styleFr: String?, abv: Double?, summary: String?, vivinoBid: Int?, source: String?, photoURL: String?) {
+        self.ok = ok
+        self.error = error
+        self.barcode = barcode
+        self.wineName = wineName
+        self.producer = producer
+        self.style = style
+        self.styleFr = styleFr
+        self.abv = abv
+        self.summary = summary
+        self.vivinoBid = vivinoBid
+        self.source = source
+        self.photoURL = photoURL
     }
 
     func asProduct(fallbackBarcode: String) -> WineProduct {
@@ -141,7 +160,7 @@ struct CheckinItem: Identifiable, Codable, Hashable {
         case createdAt = "created_at"
         case photoURL = "photo_url"
         case hiddenFromPartner = "hidden_from_partner"
-        case vivinoBid = "vivino_bid"
+        case vivinoBid = "vivino_id"
     }
 }
 
@@ -149,16 +168,19 @@ struct HistoryStats: Codable {
     let total: Int
     let avgRating: Double?
     let topStyles: [TopStyle]?
+    let topColors: [TopStyle]?
     let last: LastCheckin?
 
     enum CodingKeys: String, CodingKey {
         case total, last
         case avgRating = "avg_rating"
         case topStyles = "top_styles"
+        case topColors = "top_colors"
     }
 
     struct TopStyle: Codable {
         let style: String?
+        let color: String?
         let count: Int?
     }
 
@@ -404,6 +426,15 @@ struct CreateCheckinResult: Decodable {
         case ok, id, duplicate, error, rpg
         case previousCheckin = "previous_checkin"
     }
+
+    init(ok: Bool?, id: Int?, duplicate: Bool?, error: String?, previousCheckin: PreviousCheckin?, rpg: RpgLoot?) {
+        self.ok = ok
+        self.id = id
+        self.duplicate = duplicate
+        self.error = error
+        self.previousCheckin = previousCheckin
+        self.rpg = rpg
+    }
 }
 
 struct DecodeBarcodeResponse: Decodable {
@@ -483,3 +514,10 @@ struct OKResponse: Decodable {
 }
 
 // (legacy structs removed)
+
+struct CheckinsListResponse: Decodable {
+    let items: [CheckinItem]?
+    let count: Int?
+    let limit: Int?
+    let offset: Int?
+}

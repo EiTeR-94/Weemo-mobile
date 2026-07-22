@@ -134,8 +134,8 @@ struct HistorySheetView: View {
             Button { selected = item } label: {
                 HStack(alignment: .top, spacing: 12) {
                     Group {
-                        if item.photoURL != nil {
-                            WineImage(path: item.photoURL)
+                        if item.resolvedPhoto != nil {
+                            WineImage(path: item.resolvedPhoto)
                                 .frame(width: 88, height: 88)
                                 .scaledToFill()
                         } else {

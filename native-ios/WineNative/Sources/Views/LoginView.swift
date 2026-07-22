@@ -24,7 +24,7 @@ struct LoginView: View {
                     VStack(spacing: 6) {
                         Text("🍷")
                             .font(.system(size: 40))
-                        Text("Weeno Quest")
+                        Text("Weeno")
                             .font(.system(size: Theme.Font.h1, weight: .bold))
                             .foregroundStyle(Theme.text)
                         Text("Journal de dégustation privé")

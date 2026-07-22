@@ -419,7 +419,7 @@ final class AppModel: ObservableObject {
                 do {
                     let me = try await api.me()
                     lastEndpointLatency = Date().timeIntervalSince(t0)
-                    if let u = me.user, !u.isEmpty {
+                    if let u = me.resolvedUser, !u.isEmpty {
                         networkStatus = .online
                         lastSuccessfulBase = api.baseURL
                         applySession(user: u, isAdmin: false, isInvite: true, loggedIn: true, inviteLabel: InviteSessionStore.label)
@@ -489,7 +489,7 @@ final class AppModel: ObservableObject {
             api.enableInviteMode(false)
             do {
                 let me = try await api.me()
-                if let u = me.user, !u.isEmpty {
+                if let u = me.resolvedUser, !u.isEmpty {
                     applySession(
                         user: u,
                         isAdmin: me.isAdmin ?? false,

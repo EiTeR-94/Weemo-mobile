@@ -11,7 +11,7 @@ struct WeenoHeader: View {
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Weeno Quest")
+                Text("Weeno")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Theme.text)
                 Text("scan · photo · note")
@@ -599,7 +599,7 @@ struct HistoryCardView: View {
     }
 
     private var resolvedPhotoURL: URL? {
-        ServerSettings.resolveAssetURL(item.photoURL, base: photoBase)
+        ServerSettings.resolveAssetURL(item.resolvedPhoto, base: photoBase)
     }
 
     private var starFill: CGFloat {
@@ -657,7 +657,7 @@ struct InviteHelpBar: View {
         HStack(alignment: .top, spacing: 8) {
             (
                 Text("Conseil").fontWeight(.semibold).foregroundColor(Theme.accent)
-                + Text(" — garde Weeno Quest installé sur ton écran d'accueil et évite de vider ses données dans les réglages du téléphone : c'est ce qui maintient ta connexion.")
+                + Text(" — garde Weeno installé sur ton écran d'accueil et évite de vider ses données dans les réglages du téléphone : c'est ce qui maintient ta connexion.")
                     .foregroundColor(Theme.text)
             )
             .font(.system(size: 12.8))

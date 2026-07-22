@@ -32,8 +32,8 @@ struct CheckinDetailView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     Group {
-                        if item.photoURL != nil {
-                            WineImage(path: item.photoURL)
+                        if item.resolvedPhoto != nil {
+                            WineImage(path: item.resolvedPhoto)
                                 .frame(maxWidth: .infinity)
                                 .frame(maxHeight: 320)
                                 .scaledToFit()

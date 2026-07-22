@@ -188,7 +188,7 @@ struct MainView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Weeno Quest")
+                Text("Weeno")
                     .font(.system(size: Theme.Font.h1, weight: .bold))
                     .foregroundStyle(Theme.text)
                 Text(headerSubtitle)
@@ -391,7 +391,7 @@ private struct LootSummarySheet: View {
                 .padding(16)
             }
             .background(Theme.bg)
-            .navigationTitle("Weeno Quest")
+            .navigationTitle("Weeno")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -532,7 +532,7 @@ private struct AccountMenuOverlay: View {
                 section("Admin")
                 item("⚙️ Administration") { onOpen(.admin) }
                 // Toujours visible admin : même si Weeno Quest est coupé (pour le rallumer)
-                item("⚔ Weeno Quest") { onOpen(.rpgAdmin) }
+                item("⚔ Quest (bientôt)") { onOpen(.rpgAdmin) }
                 item("📝 Patch notes") { onOpen(.patchnotes) }
             }
 

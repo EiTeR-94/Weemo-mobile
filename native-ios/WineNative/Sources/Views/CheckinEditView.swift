@@ -49,7 +49,7 @@ struct CheckinEditView: View {
                             .stroke(Theme.border, style: StrokeStyle(lineWidth: 2, dash: [6]))
                             .background(Theme.card)
                             .frame(minHeight: 140)
-                        if let path = item.photoURL, !removePhoto, newPhoto == nil {
+                        if let path = item.resolvedPhoto, !removePhoto, newPhoto == nil {
                             WineImage(path: path)
                                 .scaledToFit()
                                 .frame(maxHeight: 200)
@@ -61,7 +61,7 @@ struct CheckinEditView: View {
                         }
                     }
                 }
-                if item.photoURL != nil {
+                if item.resolvedPhoto != nil {
                     WeenoSecondaryButton(title: "Retirer la photo") { removePhoto = true; newPhoto = nil }
                 }
 
