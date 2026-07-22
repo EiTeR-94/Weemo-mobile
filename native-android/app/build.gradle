@@ -26,8 +26,8 @@ android {
         minSdk 26
         targetSdk 34
         // First APK signed with plexi-beer release keystore (dist). Guests reinstall once.
-        versionCode 2
-        versionName "0.1.1-bis"
+        versionCode 3
+        versionName "0.1.2-bis"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,7 +45,9 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 minify + shrink : réduit surface strings/libs (Bearer jamais en clair au repos)
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (beerHasSigning) {
                 signingConfig signingConfigs.dist
@@ -107,6 +109,9 @@ dependencies {
     // Networking already using OkHttp + Gson (add for multipart if needed)
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Bearer Vivino chiffré au repos (AES256-GCM via Android Keystore)
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

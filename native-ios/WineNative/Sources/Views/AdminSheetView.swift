@@ -237,8 +237,11 @@ struct AdminSheetView: View {
     private var toolsTab: some View {
         WeenoAdminSub(title: "Outils")
         VStack(spacing: 8) {
-            WeenoPrimaryButton(title: "⚔ Admin Weeno Quest") {
-                showRpgAdmin = true
+            // Weeno Quest non branché sur wine-bis — bouton masqué tant que rpgActive
+            if app.rpgActive {
+                WeenoPrimaryButton(title: "⚔ Admin Weeno Quest") {
+                    showRpgAdmin = true
+                }
             }
             WeenoSecondaryButton(title: "🧹 Nettoyer photos orphelines") {
                 Task {
@@ -269,27 +272,28 @@ struct AdminSheetView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.text)
             Text(vivinoTokenConfigured
-                 ? "● Bearer configuré (Keychain) — scan direct api.vivino.com"
+                 ? "● Bearer chiffré (Keychain ThisDeviceOnly) — scan direct api.vivino.com"
                  : "● Bearer manquant — colle le token session app Vivino")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(vivinoTokenConfigured ? Theme.ok : Theme.error)
-            Text("Le scan part du téléphone. Le journal reste sur WeenoBis.")
+            Text("Stocké dans le Keychain (pas de backup iCloud). Le journal reste sur WeenoBis.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.muted)
             WeenoField(label: "Bearer Vivino (sans le mot Bearer)", text: $vivinoBearerDraft, placeholder: "colle le token…")
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .textContentType(.password)
+                .privacySensitive()
             WeenoField(label: "User id (optionnel)", text: $vivinoUserIdDraft, placeholder: "ex. 47968799")
                 .keyboardType(.numberPad)
             HStack(spacing: 8) {
                 WeenoPrimaryButton(title: "Enregistrer") {
-                    var t = vivinoBearerDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if t.lowercased().hasPrefix("bearer ") { t = String(t.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
-                    VivinoTokenStore.bearer = t.isEmpty ? nil : t
+                    // Strip "Bearer " fait aussi dans VivinoTokenStore
+                    VivinoTokenStore.bearer = vivinoBearerDraft
                     VivinoTokenStore.userId = vivinoUserIdDraft.trimmingCharacters(in: .whitespacesAndNewlines).ifEmptyNil
                     vivinoTokenConfigured = VivinoTokenStore.isConfigured
                     vivinoBearerDraft = ""
-                    message = vivinoTokenConfigured ? "Bearer Vivino enregistré" : "Bearer effacé"
+                    message = vivinoTokenConfigured ? "Bearer Vivino enregistré (Keychain)" : "Bearer effacé"
                 }
                 WeenoSecondaryButton(title: "Effacer") {
                     VivinoTokenStore.bearer = nil
@@ -562,9 +566,13 @@ struct AdminSheetView: View {
                 dashTile("👥", "\(users.count)", "Comptes")
                 dashTile("✉️", "\(activeInvites)", "Invités actifs")
                 dashTile("🍷", "\(totalCheckins)", "Check-ins")
-                dashTile("⚔", "\(rpgWithProfile)", "RPG profils")
+                if app.rpgActive {
+                    dashTile("⚔", "\(rpgWithProfile)", "RPG profils")
+                }
                 dashTile("💬", "\(feedbackUnread)", "Feedback")
-                dashTile("🏅", "\(rpgPlayersCount)", "Joueurs RPG")
+                if app.rpgActive {
+                    dashTile("🏅", "\(rpgPlayersCount)", "Joueurs RPG")
+                }
             }
         }
         .padding(.bottom, 4)

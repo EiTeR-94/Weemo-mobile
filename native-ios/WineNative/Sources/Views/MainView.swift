@@ -531,8 +531,10 @@ private struct AccountMenuOverlay: View {
             if isAdmin {
                 section("Admin")
                 item("⚙️ Administration") { onOpen(.admin) }
-                // Toujours visible admin : même si Weeno Quest est coupé (pour le rallumer)
-                item("⚔ Quest (bientôt)") { onOpen(.rpgAdmin) }
+                // Weeno Quest non branché sur wine-bis — entrée masquée (évite 404/UI morte)
+                if rpgActive {
+                    item("⚔ Weeno Quest") { onOpen(.rpgAdmin) }
+                }
                 item("📝 Patch notes") { onOpen(.patchnotes) }
             }
 

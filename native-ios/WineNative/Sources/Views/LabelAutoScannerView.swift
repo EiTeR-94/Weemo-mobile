@@ -38,10 +38,11 @@ final class LabelAutoScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private var stableCount = 0
     private var capturing = false
     private var fired = false
-    private let minStableFrames = 4          // ~0.6–0.8 s selon throttle
-    private let analyzeEveryN = 4
-    private let minChars = 12
-    private let minLines = 2
+    /// Plus strict : évite les faux déclenchements (menu, mur, texte flou)
+    private let minStableFrames = 7          // ~1.0–1.4 s selon throttle
+    private let analyzeEveryN = 5
+    private let minChars = 18
+    private let minLines = 3
 
     override func viewDidLoad() {
         super.viewDidLoad()

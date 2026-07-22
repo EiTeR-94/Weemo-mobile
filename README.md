@@ -10,7 +10,12 @@ Fork de `wine-mobile` (Weeno) :
 
 ## Bearer Vivino
 
-Admin → Outils → coller Bearer (+ user id optionnel). Stocké Keychain (iOS) / SharedPreferences (Android).
+Admin → Outils → coller Bearer (+ user id optionnel).
+
+- **iOS** : Keychain `AfterFirstUnlockThisDeviceOnly` (pas de backup iCloud)
+- **Android** : `EncryptedSharedPreferences` (AES-256-GCM via Android Keystore), migration auto depuis l’ancien prefs clair
+
+Jamais loggé. Champ admin masqué (password). Scan = téléphone → api.vivino.com.
 
 ## Build
 

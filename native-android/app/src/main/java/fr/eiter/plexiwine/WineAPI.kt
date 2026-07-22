@@ -899,16 +899,22 @@ class WineAPI private constructor(context: Context) {
     /**
      * Scan étiquette WeenoBis : **direct téléphone → Vivino** si Bearer configuré,
      * sinon fallback POST /api/label-scan serveur.
+     *
+     * Compression unique :
+     * - device path → [VivinoScanClient] (limite 0.5 Mo)
+     * - serveur → une seule passe [ImageUtils] ici (ne pas pré-compresser en amont)
      */
     suspend fun labelScan(jpeg: ByteArray): LabelScanResult {
         if (VivinoTokenStore.isConfigured(appContext)) {
             return VivinoScanClient.labelScan(appContext, jpeg)
         }
+        // Fallback serveur : une seule compression ici (Bearer non configuré)
+        val payload = ImageUtils.compressJPEG(jpeg)
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart(
                 "file",
                 "label.jpg",
-                jpeg.toRequestBody("image/jpeg".toMediaType())
+                payload.toRequestBody("image/jpeg".toMediaType())
             )
             .build()
         val (respBody, code) = execute(requestBuilder("api/label-scan").post(body).build())
@@ -918,8 +924,8 @@ class WineAPI private constructor(context: Context) {
             return LabelScanResult(
                 ok = false,
                 aiAvailable = false,
-                aiError = "Scan KO ($code) — $snippet",
-                hint = "Réessaie ou saisis / cherche sur Vivino."
+                aiError = "Scan serveur KO ($code) — $snippet",
+                hint = "Configure le Bearer Vivino (Admin) pour le scan direct téléphone, ou saisis / cherche."
             )
         }
         val root = try {

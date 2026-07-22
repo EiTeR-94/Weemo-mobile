@@ -534,8 +534,8 @@ struct WineWizardView: View {
 
     private func processScanPhoto(_ image: UIImage) async {
         labelPreview = image
-        guard let raw = image.jpegData(compressionQuality: 0.92) else { return }
-        let jpeg = WineImageUtils.compressJPEG(raw)
+        // Qualité haute une fois ; compression Vivino/serveur = unique dans labelScan
+        guard let jpeg = image.jpegData(compressionQuality: 0.92) else { return }
         busy = true
         scanStatus = "Analyse de l’étiquette…"
         defer { busy = false }

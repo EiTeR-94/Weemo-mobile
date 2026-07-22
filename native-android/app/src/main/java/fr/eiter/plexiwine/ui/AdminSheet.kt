@@ -167,6 +167,7 @@ fun AdminSheet(vm: AppViewModel) {
             needsUpdate = vm.needsAppUpdate,
             rpgPlayers = rpgPlayers,
             rpgProfiles = rpgProfiles,
+            showRpg = vm.rpgActive,
         )
         Spacer(Modifier.height(10.dp))
 
@@ -400,10 +401,13 @@ fun AdminSheet(vm: AppViewModel) {
                     // ── Outils (parité iOS) ──
                     Text("Outils", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
-                    WeenoPrimaryButton("⚔ Admin Weeno") {
-                        vm.openSheet(WeenoSheet.RPG_ADMIN)
+                    // Weeno Quest non branché sur wine-bis — bouton masqué tant que rpgActive
+                    if (vm.rpgActive) {
+                        WeenoPrimaryButton("⚔ Admin Weeno Quest") {
+                            vm.openSheet(WeenoSheet.RPG_ADMIN)
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
-                    Spacer(Modifier.height(8.dp))
                     WeenoSecondaryButton("🧹 Nettoyer photos orphelines") {
                         scope.launch {
                             try {
@@ -428,14 +432,14 @@ fun AdminSheet(vm: AppViewModel) {
                     Text("Scan Vivino (depuis le téléphone)", color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        if (vivinoConfigured) "● Bearer configuré — scan direct api.vivino.com"
+                        if (vivinoConfigured) "● Bearer chiffré (EncryptedPrefs) — scan direct api.vivino.com"
                         else "● Bearer manquant — colle le token session app Vivino",
                         color = if (vivinoConfigured) WineColors.ok else WineColors.error,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Le scan part du téléphone. Le journal reste sur WeenoBis.",
+                        "Stocké chiffré sur l’appareil (jamais en clair). Le journal reste sur WeenoBis.",
                         color = WineColors.muted,
                         fontSize = 11.sp
                     )
@@ -446,6 +450,7 @@ fun AdminSheet(vm: AppViewModel) {
                         label = { Text("Bearer Vivino") },
                         placeholder = { Text("colle le token…") },
                         singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                         colors = adminFieldColors()
                     )
@@ -701,6 +706,7 @@ private fun AdminDashboard(
     needsUpdate: Boolean,
     rpgPlayers: Int,
     rpgProfiles: Int,
+    showRpg: Boolean = false,
 ) {
     val activeInvites = invites.count {
         it.active == true || (it.redeemedAt != null && it.revokedAt == null)
@@ -716,7 +722,7 @@ private fun AdminDashboard(
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("📊 Tableau de bord", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Text("Weeno", color = WineColors.accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
+            Text("WeenoBis", color = WineColors.accent, fontWeight = FontWeight.Black, fontSize = 11.sp)
         }
         Spacer(Modifier.height(8.dp))
         Text("Versions", color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -747,9 +753,14 @@ private fun AdminDashboard(
         }
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            DashTile("⚔", "$rpgProfiles", "RPG profils", Modifier.weight(1f))
+            // RPG tiles masqués tant que Weeno Quest off (évite stats fantômes)
+            if (showRpg) {
+                DashTile("⚔", "$rpgProfiles", "RPG profils", Modifier.weight(1f))
+            }
             DashTile("💬", "$feedbackUnread", "Feedback", Modifier.weight(1f))
-            DashTile("🏅", "$rpgPlayers", "Joueurs RPG", Modifier.weight(1f))
+            if (showRpg) {
+                DashTile("🏅", "$rpgPlayers", "Joueurs RPG", Modifier.weight(1f))
+            }
         }
     }
 }

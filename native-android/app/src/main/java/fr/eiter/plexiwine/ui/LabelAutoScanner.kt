@@ -91,8 +91,11 @@ fun LabelAutoScanner(
     val analyzing = remember { AtomicBoolean(false) }
     val frameN = remember { AtomicInteger(0) }
     var lastSig by remember { mutableStateOf("") }
-    val minStable = 4
-    val analyzeEvery = 4
+    // Plus strict : évite faux déclenchements (menu, mur, texte flou)
+    val minStable = 7
+    val analyzeEvery = 5
+    val minChars = 18
+    val minLines = 3
 
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -199,7 +202,7 @@ fun LabelAutoScanner(
                                     val text = lines.joinToString("\n")
                                     val chars = text.count { !it.isWhitespace() }
                                     val sig = lines.take(6).joinToString("|").lowercase()
-                                    val good = chars >= 12 && lines.size >= 2
+                                    val good = chars >= minChars && lines.size >= minLines
                                     // Main thread UI
                                     previewView.post {
                                         if (fired.get()) return@post

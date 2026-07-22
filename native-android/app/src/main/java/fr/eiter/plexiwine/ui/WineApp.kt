@@ -679,8 +679,10 @@ private fun AccountMenuOverlay(
             if (vm.isAdmin) {
                 AccountSection("Admin")
                 AccountMenuItem("⚙️ Administration") { onOpen(WeenoSheet.ADMIN) }
-                // Toujours visible admin : même si Weeno est coupé (pour le rallumer)
-                AccountMenuItem("⚔ Weeno") { onOpen(WeenoSheet.RPG_ADMIN) }
+                // Weeno Quest non branché sur wine-bis — entrée masquée (évite 404/UI morte)
+                if (vm.rpgActive) {
+                    AccountMenuItem("⚔ Weeno Quest") { onOpen(WeenoSheet.RPG_ADMIN) }
+                }
                 AccountMenuItem("📝 Patch notes") { onOpen(WeenoSheet.PATCHNOTES) }
             }
 
@@ -1182,8 +1184,8 @@ private fun WeenoWizard(vm: AppViewModel) {
             busy = true
             scanStatus = "Analyse de l’étiquette…"
             try {
-                val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                val scan = api.labelScan(jpeg)
+                // Compression unique dans WineAPI / VivinoScanClient (pas de double lossy)
+                val scan = api.labelScan(f.readBytes())
                 if (!scan.wineName.isNullOrBlank() || !scan.producer.isNullOrBlank()) {
                     vivinoQuery = listOfNotNull(scan.producer, scan.wineName).filter { it.isNotBlank() }.joinToString(" ")
                 }
@@ -1210,9 +1212,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                     val raw = (scan.aiError ?: scan.hint ?: "").lowercase()
                     scanStatus = when {
                         !scan.hint.isNullOrBlank() -> scan.hint!!
-                        !scan.aiError.isNullOrBlank() -> scan.aiError!!
+                        raw.contains("bearer") || raw.contains("token") ->
+                            "Bearer Vivino manquant ou refusé — Admin → coller un token frais"
                         raw.contains("429") || raw.contains("quota") || raw.contains("rate") ->
                             "Scan temporairement saturé — réessaie ou saisie manuelle"
+                        !scan.aiError.isNullOrBlank() -> scan.aiError!!
                         else -> "Scan indisponible — saisis ou cherche sur Vivino"
                     }
                 }
@@ -1243,8 +1247,8 @@ private fun WeenoWizard(vm: AppViewModel) {
             busy = true
             scanStatus = "Analyse de l’étiquette…"
             try {
-                val compressed = ImageUtils.compressJPEG(jpeg)
-                val scan = api.labelScan(compressed)
+                // Compression unique dans WineAPI / VivinoScanClient
+                val scan = api.labelScan(jpeg)
                 if (!scan.wineName.isNullOrBlank() || !scan.producer.isNullOrBlank()) {
                     vivinoQuery = listOfNotNull(scan.producer, scan.wineName).filter { it.isNotBlank() }.joinToString(" ")
                 }
@@ -1467,8 +1471,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                                 busy = true
                                 scanStatus = "Analyse de l’étiquette…"
                                 try {
-                                    val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                                    val scan = api.labelScan(jpeg)
+                                    val scan = api.labelScan(f.readBytes())
                                     if (!scan.producer.isNullOrBlank()) vivinoProducer = scan.producer!!
                                     if (!scan.wineName.isNullOrBlank()) {
                                         vivinoQuery = listOfNotNull(scan.producer, scan.wineName)

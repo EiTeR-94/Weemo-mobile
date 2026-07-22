@@ -3,19 +3,48 @@ import UIKit
 
 /// Scan étiquette **direct iPhone → api.vivino.com** (Bearer Keychain).
 /// Contrat observé mitm : POST /v/11.0.0/scans/label + GET /v/9.1.1/vintages/{id}
+/// Compression unique ici — ne pas pré-compresser en amont. Bearer jamais loggé.
 enum VivinoScanClient {
     private static let base = "https://api.vivino.com"
     private static let scanPath = "/v/11.0.0/scans/label"
-    private static let ua = "Vivino regular/2026.29.0 (iPhone; iOS 18.0; Scale/3.00)"
+    private static let appVersion = "2026.29.0"
     private static let maxBytes = 480 * 1024
 
+    /// UA proche app Vivino, OS + scale réels.
+    private static var ua: String {
+        let ios = UIDevice.current.systemVersion
+        let scale = String(format: "%.2f", UIScreen.main.scale)
+        return "Vivino regular/\(appVersion) (iPhone; iOS \(ios); Scale/\(scale))"
+    }
+
+    private static var osVersion: String {
+        UIDevice.current.systemVersion
+    }
+
+    private static var phoneModel: String {
+        // utsname machine (ex. iPhone15,2) si dispo, sinon générique
+        var sys = utsname()
+        uname(&sys)
+        let mirror = Mirror(reflecting: sys.machine)
+        let id = mirror.children.reduce("") { acc, el in
+            guard let v = el.value as? Int8, v != 0 else { return acc }
+            return acc + String(UnicodeScalar(UInt8(v)))
+        }
+        return id.isEmpty ? "iPhone" : id
+    }
+
+    /**
+     * Compression unique pour Vivino sous maxBytes.
+     * Si déjà sous la limite : pas de ré-encodage (évite double lossy).
+     */
     static func compressForVivino(_ jpeg: Data) -> Data {
-        // Sous 0.5 Mo (limite API)
+        if jpeg.count > 0 && jpeg.count <= maxBytes { return jpeg }
         var data = WineImageUtils.compressJPEG(jpeg, maxDimension: 1600, quality: 0.82)
-        var q: CGFloat = 0.78
+        if data.count <= maxBytes { return data }
+        var q: CGFloat = 0.74
         while data.count > maxBytes, q > 0.35 {
-            q -= 0.08
             data = WineImageUtils.compressJPEG(jpeg, maxDimension: 1400, quality: q)
+            q -= 0.08
         }
         if data.count > maxBytes {
             data = WineImageUtils.compressJPEG(jpeg, maxDimension: 1100, quality: 0.45)
@@ -28,8 +57,8 @@ enum VivinoScanClient {
             return LabelScanResult(
                 ok: false,
                 aiAvailable: false,
-                aiError: "Bearer Vivino manquant — Admin → Outils → coller le token",
-                hint: "Configure le Bearer (session app Vivino) dans l’admin.",
+                aiError: "Bearer Vivino manquant",
+                hint: "Admin → coller le Bearer (session app Vivino). Le scan part du téléphone, pas du serveur.",
                 wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
                 candidates: [], vivinoQuery: nil, labelPhotoPath: nil
             )
@@ -37,10 +66,10 @@ enum VivinoScanClient {
         let payload = compressForVivino(jpeg)
         var comps = URLComponents(string: base + scanPath)!
         var items: [URLQueryItem] = [
-            .init(name: "app_version", value: "2026.29.0"),
+            .init(name: "app_version", value: appVersion),
             .init(name: "app_platform", value: "iphone"),
-            .init(name: "app_phone", value: "iPhone18,3"),
-            .init(name: "os_version", value: "18.0"),
+            .init(name: "app_phone", value: phoneModel),
+            .init(name: "os_version", value: osVersion),
             .init(name: "app_caller_origin", value: "default"),
             .init(name: "language", value: "fr"),
             .init(name: "image_type", value: "jpg"),
@@ -75,23 +104,39 @@ enum VivinoScanClient {
         req.httpBody = body
         req.timeoutInterval = 45
 
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await URLSession.shared.data(for: req)
+        } catch {
+            return LabelScanResult(
+                ok: false, aiAvailable: false,
+                aiError: "Réseau scan Vivino",
+                hint: "Vérifie la connexion (Wi‑Fi / données).",
+                wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
+                candidates: [], vivinoQuery: nil, labelPhotoPath: nil
+            )
+        }
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if code == 401 || code == 403 {
             return LabelScanResult(
                 ok: false, aiAvailable: false,
-                aiError: "Token Vivino refusé (HTTP \(code)) — reconnecte l’app Vivino et mets à jour le Bearer",
-                hint: "Bearer expiré ou révoqué.",
+                aiError: "Token Vivino refusé (HTTP \(code))",
+                hint: "Reconnecte l’app Vivino, capture un nouveau Bearer, puis Admin → Enregistrer.",
                 wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
                 candidates: [], vivinoQuery: nil, labelPhotoPath: nil
             )
         }
         if code == 400 {
-            let snip = String(data: data, encoding: .utf8)?.prefix(160) ?? ""
+            let snip = String(data: data, encoding: .utf8) ?? ""
+            let tooLarge = snip.localizedCaseInsensitiveContains("IMAGE_TOO_LARGE")
+                || snip.localizedCaseInsensitiveContains("too large")
             return LabelScanResult(
                 ok: false, aiAvailable: false,
-                aiError: "Scan Vivino 400 — \(snip)",
-                hint: "Image trop lourde ou format refusé.",
+                aiError: tooLarge ? "Image encore trop lourde pour Vivino" : "Scan Vivino 400",
+                hint: tooLarge
+                    ? "Recadre plus près ou photo manuelle moins nette."
+                    : "Format refusé — réessaie ou saisie manuelle.",
                 wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
                 candidates: [], vivinoQuery: nil, labelPhotoPath: nil
             )
@@ -102,7 +147,7 @@ enum VivinoScanClient {
             return LabelScanResult(
                 ok: false, aiAvailable: false,
                 aiError: "Réponse scan illisible (HTTP \(code))",
-                hint: nil,
+                hint: "Réessaie ou saisie manuelle.",
                 wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
                 candidates: [], vivinoQuery: nil, labelPhotoPath: nil
             )
@@ -125,7 +170,7 @@ enum VivinoScanClient {
         return LabelScanResult(
             ok: true, aiAvailable: false,
             aiError: nil,
-            hint: "Vision Vivino : pas de match — cherche sur Vivino ou saisie manuelle.",
+            hint: "Vision Vivino : pas de match — cherche le vin ou saisie manuelle.",
             wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
             candidates: [], vivinoQuery: nil, labelPhotoPath: nil
         )

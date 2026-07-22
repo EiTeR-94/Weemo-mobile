@@ -1,21 +1,45 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# WeenoBis — R8 release rules
+# Objectif : minify libs tierces sans casser Gson/Compose/ML Kit/CameraX.
+# Les modèles app sont conservés (JSON stable). Secrets (Bearer) = EncryptedSharedPreferences.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod, Exceptions
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- App models + UI (Gson reflection, Compose) ---
+-keep class fr.eiter.plexiwine.** { *; }
+-keepclassmembers class fr.eiter.plexiwine.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# --- Gson ---
+-keep class com.google.gson.** { *; }
+-keepclassmembers,allowobfuscation class * {
+  @com.google.gson.annotations.SerializedName <fields>;
+}
+-dontwarn com.google.gson.**
+
+# --- OkHttp / Okio ---
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.internal.publicsuffix.PublicSuffixDatabase { *; }
+
+# --- Coil ---
+-dontwarn coil.**
+
+# --- CameraX ---
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+
+# --- ML Kit (barcode + text) ---
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.**
+
+# --- EncryptedSharedPreferences / Tink ---
+-keep class androidx.security.crypto.** { *; }
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# --- Compose (stable) ---
+-dontwarn androidx.compose.**
+

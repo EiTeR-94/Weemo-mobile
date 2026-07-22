@@ -1388,11 +1388,13 @@ final class WineAPI {
     }
 
     /// Scan étiquette : **direct iPhone → Vivino** (WeenoBis), fallback serveur si pas de Bearer.
+    /// Compression unique : device → VivinoScanClient ; serveur → une passe ici.
     func labelScan(jpeg: Data) async throws -> LabelScanResult {
         if VivinoTokenStore.isConfigured {
             return try await VivinoScanClient.labelScan(jpeg: jpeg)
         }
-        // Fallback serveur (backend wine-bis) si token absent
+        // Fallback serveur (backend wine-bis) si token absent — une seule compression
+        let payload = WineImageUtils.compressJPEG(jpeg)
         let boundary = "WeenoScan-\(UUID().uuidString)"
         var req = URLRequest(url: try url("/api/label-scan"))
         req.httpMethod = "POST"
@@ -1400,7 +1402,7 @@ final class WineAPI {
         req.httpBody = makeMultipart(
             boundary: boundary,
             fields: [:],
-            file: ("file", "label.jpg", "image/jpeg", jpeg)
+            file: ("file", "label.jpg", "image/jpeg", payload)
         )
         let (data, http, _) = try await performTransport(req)
         try throwIfUnauthorized(http.statusCode)
@@ -1409,8 +1411,8 @@ final class WineAPI {
             return LabelScanResult(
                 ok: false,
                 aiAvailable: false,
-                aiError: "Scan KO (\(http.statusCode))" + (snippet.map { " — \($0)" } ?? ""),
-                hint: "Réessaie ou saisis / cherche sur Vivino.",
+                aiError: "Scan serveur KO (\(http.statusCode))" + (snippet.map { " — \($0)" } ?? ""),
+                hint: "Configure le Bearer Vivino (Admin) pour le scan direct téléphone, ou saisis / cherche.",
                 wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
                 candidates: [], vivinoQuery: nil, labelPhotoPath: nil
             )
