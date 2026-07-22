@@ -104,22 +104,25 @@ struct WeenoFilterLabel<Content: View>: View {
     }
 }
 
-/// Menu déroulant aligné sur le style des champs de formulaire (admin, saisie manuelle).
+/// Menu déroulant joli (champ formulaire) — une valeur.
 struct WeenoFormSelectField: View {
     let label: String
     let value: String
     let options: [(String, String)]
     let onSelect: (String) -> Void
+    var placeholder: String = "Choisir…"
 
     private var display: String {
-        options.first(where: { $0.0 == value })?.1 ?? "Choisir…"
+        options.first(where: { $0.0 == value })?.1 ?? placeholder
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.system(size: Theme.Font.field))
-                .foregroundStyle(Theme.muted)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.system(size: Theme.Font.field))
+                    .foregroundStyle(Theme.muted)
+            }
             Menu {
                 ForEach(options, id: \.0) { opt in
                     Button {
@@ -144,13 +147,166 @@ struct WeenoFormSelectField: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.muted)
                 }
-                .font(.system(size: 16))
-                .padding(12)
+                .font(.system(size: 15))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.fieldBg)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
+        }
+    }
+}
+
+/// Menu multi-sélection tags prédéfinis (sheet liste + recherche, pas chips).
+struct WeenoTagDropdownField: View {
+    let label: String
+    let tags: [String]
+    @Binding var selected: Set<String>
+    var maxCount: Int = 8
+    var suggested: Set<String> = []
+
+    @State private var open = false
+    @State private var filter = ""
+
+    private var filtered: [String] {
+        let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty { return tags }
+        return tags.filter { $0.lowercased().contains(q) }
+    }
+
+    private var summary: String {
+        if selected.isEmpty { return "Ajouter un tag prédéfini…" }
+        let list = Array(selected).sorted()
+        if list.count <= 2 { return list.joined(separator: ", ") }
+        return "\(list.count) tags sélectionnés"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !label.isEmpty {
+                Text(label)
+                    .font(.system(size: Theme.Font.field))
+                    .foregroundStyle(Theme.muted)
+            }
+            Button { open = true } label: {
+                HStack(spacing: 8) {
+                    Text(summary)
+                        .lineLimit(1)
+                        .foregroundStyle(selected.isEmpty ? Theme.muted : Theme.text)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                }
+                .font(.system(size: 15))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.fieldBg)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            if !selected.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(selected).sorted(), id: \.self) { tag in
+                        HStack {
+                            Text(tag)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.accent)
+                            Spacer(minLength: 0)
+                            Button("retirer") {
+                                selected.remove(tag)
+                            }
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.muted)
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .sheet(isPresented: $open) {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(Theme.muted)
+                        TextField("Filtrer…", text: $filter)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .foregroundStyle(Theme.text)
+                    }
+                    .padding(12)
+                    .background(Theme.fieldBg)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+
+                    Text("\(selected.count)/\(maxCount) sélectionnés")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 6)
+
+                    List {
+                        ForEach(filtered, id: \.self) { tag in
+                            let on = selected.contains(tag)
+                            let isSug = suggested.contains(tag)
+                            Button {
+                                if on {
+                                    selected.remove(tag)
+                                } else if selected.count < maxCount {
+                                    selected.insert(tag)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(tag)
+                                        .foregroundStyle(Theme.text)
+                                    if isSug {
+                                        Text("Vivino")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(Theme.star)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .overlay(Capsule().stroke(Theme.star.opacity(0.5), lineWidth: 0.5))
+                                    }
+                                    Spacer()
+                                    if on {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Theme.accent)
+                                    } else {
+                                        Image(systemName: "circle")
+                                            .foregroundStyle(Theme.muted)
+                                    }
+                                }
+                            }
+                            .listRowBackground(Theme.card)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+                .background(Theme.bg)
+                .navigationTitle("Tags prédéfinis")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("OK") { open = false }
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.accent)
+                    }
+                }
+                .preferredColorScheme(.dark)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 }

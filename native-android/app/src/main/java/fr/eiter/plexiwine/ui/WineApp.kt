@@ -1521,13 +1521,35 @@ private fun WeenoWizard(vm: AppViewModel) {
                         Spacer(Modifier.height(6.dp))
                         WeenoField("Année / millésime", manualVintage, { manualVintage = it }, "2019", KeyboardType.Number)
                         Spacer(Modifier.height(6.dp))
-                        WeenoField("Couleur", manualStyle, { manualStyle = it }, "rouge / blanc / rosé…")
-                        if (styleOptions.isNotEmpty()) {
-                            Text(
-                                "Couleurs: " + styleOptions.joinToString { it.label },
-                                color = WineColors.muted,
-                                fontSize = 11.sp
-                            )
+                        val manualColorOpts = buildList {
+                            add("" to "Choisir…")
+                            if (styleOptions.isNotEmpty()) {
+                                styleOptions.filter { it.value.isNotBlank() }.forEach {
+                                    add(it.value to it.label.ifBlank { it.value })
+                                }
+                            } else {
+                                listOf(
+                                    "rouge" to "Rouge",
+                                    "blanc" to "Blanc",
+                                    "rose" to "Rosé",
+                                    "effervescent" to "Effervescent",
+                                    "orange" to "Orange",
+                                    "fortifie" to "Fortifié",
+                                    "autre" to "Autre",
+                                ).forEach { add(it) }
+                            }
+                            add("__other__" to "Autre (saisir manuellement)")
+                        }
+                        WeenoFormSelectField(
+                            label = "Couleur",
+                            value = manualStyle,
+                            options = manualColorOpts,
+                            onChange = { manualStyle = it },
+                            placeholder = "Choisir…"
+                        )
+                        if (manualStyle == "__other__") {
+                            Spacer(Modifier.height(6.dp))
+                            WeenoField("Couleur", customStyle, { customStyle = it }, "ex. orange, fortifié…")
                         }
                         Spacer(Modifier.height(6.dp))
                         WeenoField("Région", manualRegion, { manualRegion = it }, "ex. Bourgogne…")
@@ -1536,7 +1558,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                             if (manualName.isBlank()) {
                                 vm.showToast("Nom / cuvée requis", ToastPayload.Variant.WARN)
                             } else {
-                                val color = manualStyle.ifBlank { "autre" }
+                                val color = when {
+                                    manualStyle == "__other__" -> customStyle.trim().ifBlank { "autre" }
+                                    manualStyle.isBlank() -> "autre"
+                                    else -> manualStyle
+                                }
                                 val summary = listOf(manualVintage, manualRegion)
                                     .map { it.trim() }
                                     .filter { it.isNotEmpty() }
@@ -1633,7 +1659,6 @@ private fun WeenoWizard(vm: AppViewModel) {
                     VivinoRatingSlider(rating, { rating = it }, onTick = { vm.hapticTick() })
                 }
 
-                var showFlavorBrowse by remember { mutableStateOf(false) }
                 var noteVintage by remember { mutableStateOf(product?.vintage?.toString().orEmpty()) }
                 var noteColor by remember { mutableStateOf(product?.styleFr ?: product?.style?.takeIf { it != "Unknown" }.orEmpty()) }
                 var noteRegion by remember { mutableStateOf(product?.region.orEmpty()) }
@@ -1642,11 +1667,18 @@ private fun WeenoWizard(vm: AppViewModel) {
 
                 WeenoCard {
                     Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
-                    Text("Sélectionnés + tags prédéfinis", color = WineColors.muted, fontSize = 11.sp)
-                    Spacer(Modifier.height(4.dp))
-                    if (flavors.isNotEmpty()) {
-                        Text(flavors.joinToString(" · "), color = WineColors.accent, fontSize = 12.sp)
-                        Spacer(Modifier.height(4.dp))
+                    Text("Menu déroulant pour les tags prédéfinis. Ajoute les tiens en bas.", color = WineColors.muted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    if (flavorTags.isNotEmpty()) {
+                        WeenoTagDropdownField(
+                            label = "Tags prédéfinis",
+                            tags = flavorTags,
+                            selected = flavors,
+                            maxCount = 8
+                        ) { tag ->
+                            flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
                     CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
                         val t = customFlavor.trim()
@@ -1655,32 +1687,34 @@ private fun WeenoWizard(vm: AppViewModel) {
                             customFlavor = ""
                         }
                     }
-                    TextButton(onClick = { showFlavorBrowse = !showFlavorBrowse }) {
-                        Text(
-                            if (showFlavorBrowse) "Masquer les tags prédéfinis" else "Parcourir les tags prédéfinis…",
-                            color = WineColors.accent,
-                            fontSize = 12.sp
-                        )
-                    }
-                    if (showFlavorBrowse && flavorTags.isNotEmpty()) {
-                        WeenoFlavorBrowsePanel(
-                            tags = flavorTags,
-                            selected = flavors,
-                            maxCount = 8
-                        ) { tag ->
-                            flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
-                        }
-                    }
                 }
 
                 WeenoCard {
                     Text("Détails", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    WeenoField("Millésime", noteVintage, { noteVintage = it }, "2019", KeyboardType.Number)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Couleur", color = WineColors.muted, fontSize = 12.sp)
-                    Spacer(Modifier.height(4.dp))
-                    WeenoColorChipPicker(noteColor) { noteColor = it }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            WeenoField("Millésime", noteVintage, { noteVintage = it }, "2019", KeyboardType.Number)
+                        }
+                        Box(Modifier.weight(1f)) {
+                            WeenoFormSelectField(
+                                label = "Couleur",
+                                value = noteColor,
+                                options = listOf(
+                                    "" to "—",
+                                    "rouge" to "Rouge",
+                                    "blanc" to "Blanc",
+                                    "rose" to "Rosé",
+                                    "effervescent" to "Effervescent",
+                                    "orange" to "Orange",
+                                    "fortifie" to "Fortifié",
+                                    "autre" to "Autre",
+                                ),
+                                onChange = { noteColor = it },
+                                placeholder = "Choisir…"
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(4.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f)) {
@@ -2777,8 +2811,13 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
             }
             if (flavorTags.isNotEmpty()) {
                 WeenoCard {
-                    FlavorTagGrid("Goûts", flavorTags, flavors, 8) {
-                        flavors = if (it in flavors) flavors - it else flavors + it
+                    WeenoTagDropdownField(
+                        label = "Goûts / tags",
+                        tags = flavorTags,
+                        selected = flavors,
+                        maxCount = 8
+                    ) { tag ->
+                        flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
                     }
                 }
             }
@@ -2794,8 +2833,13 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
             }
             if (hopTags.isNotEmpty()) {
                 WeenoCard {
-                    FlavorTagGrid("Houblons", hopTags, hops, 6) {
-                        hops = if (it in hops) hops - it else hops + it
+                    WeenoTagDropdownField(
+                        label = "Houblons",
+                        tags = hopTags,
+                        selected = hops,
+                        maxCount = 6
+                    ) { tag ->
+                        hops = if (tag in hops) hops - tag else if (hops.size < 6) hops + tag else hops
                     }
                 }
             }

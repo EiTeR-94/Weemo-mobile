@@ -68,7 +68,12 @@ struct CheckinEditView: View {
                 VivinoRatingSlider(rating: $rating)
 
                 if !flavorTags.isEmpty {
-                    FlavorTagGrid(title: "Goûts", tags: flavorTags, selected: $flavors, maxCount: 8)
+                    WeenoTagDropdownField(
+                        label: "Goûts / tags",
+                        tags: flavorTags,
+                        selected: $flavors,
+                        maxCount: 8
+                    )
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Goûts perso")
@@ -80,11 +85,15 @@ struct CheckinEditView: View {
                         selected: $flavors,
                         maxCount: 8
                     )
-                    CustomTagChips(selected: $flavors, customOnly: flavors.subtracting(Set(flavorTags)))
                 }
 
                 if !hopTags.isEmpty {
-                    FlavorTagGrid(title: "Houblons", tags: hopTags, selected: $hops, maxCount: 6)
+                    WeenoTagDropdownField(
+                        label: "Houblons",
+                        tags: hopTags,
+                        selected: $hops,
+                        maxCount: 6
+                    )
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Houblons perso")
@@ -97,7 +106,6 @@ struct CheckinEditView: View {
                         maxCount: 6,
                         onRegister: { name in Task { try? await app.api.addHop(name) } }
                     )
-                    CustomTagChips(selected: $hops, customOnly: hops.subtracting(Set(hopTags)))
                 }
 
                 if app.isAdmin {

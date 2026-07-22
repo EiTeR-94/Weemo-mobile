@@ -45,7 +45,6 @@ struct WineWizardView: View {
     @State private var hopTags: [String] = []
     @State private var showFlavors = true
     @State private var showHops = false
-    @State private var showFlavorBrowse = false
     @State private var noteVintage = ""
     @State private var noteColor = ""
     @State private var noteRegion = ""
@@ -350,11 +349,17 @@ struct WineWizardView: View {
                 Text("Arômes & structure")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Top Vivino en or si dispo. × pour retirer. Ajoute les tiens.")
+                Text("Menu déroulant pour parcourir les tags. Ajoute les tiens en bas.")
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
-                if !flavors.isEmpty {
-                    CustomTagChips(selected: $flavors, customOnly: flavors)
+                if !flavorTags.isEmpty {
+                    WeenoTagDropdownField(
+                        label: "Tags prédéfinis",
+                        tags: flavorTags,
+                        selected: $flavors,
+                        maxCount: 8,
+                        suggested: Set(product?.suggestedFlavors ?? [])
+                    )
                 }
                 CustomTagInput(
                     placeholder: "ex. pierre chaude, salin…",
@@ -362,23 +367,6 @@ struct WineWizardView: View {
                     selected: $flavors,
                     maxCount: 8
                 )
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showFlavorBrowse.toggle() }
-                } label: {
-                    Text(showFlavorBrowse ? "Masquer les tags prédéfinis" : "Parcourir les tags prédéfinis…")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                if showFlavorBrowse, !flavorTags.isEmpty {
-                    WeenoFlavorBrowsePanel(
-                        tags: flavorTags,
-                        selected: $flavors,
-                        suggested: Set(product?.suggestedFlavors ?? []),
-                        maxCount: 8
-                    )
-                }
             }
             .beerCard()
 
@@ -386,12 +374,25 @@ struct WineWizardView: View {
                 Text("Détails")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
-                    .frame(maxWidth: 140)
-                Text("Couleur")
-                    .font(.system(size: Theme.Font.field))
-                    .foregroundStyle(Theme.muted)
-                WeenoColorChipPicker(value: $noteColor)
+                HStack(alignment: .top, spacing: 8) {
+                    WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
+                    WeenoFormSelectField(
+                        label: "Couleur",
+                        value: noteColor,
+                        options: [
+                            ("", "—"),
+                            ("rouge", "Rouge"),
+                            ("blanc", "Blanc"),
+                            ("rose", "Rosé"),
+                            ("effervescent", "Effervescent"),
+                            ("orange", "Orange"),
+                            ("fortifie", "Fortifié"),
+                            ("autre", "Autre"),
+                        ],
+                        onSelect: { noteColor = $0 },
+                        placeholder: "Choisir…"
+                    )
+                }
                 HStack(spacing: 8) {
                     WeenoField(label: "Région", text: $noteRegion, placeholder: "Saint-Aubin…")
                     WeenoField(label: "Pays", text: $noteCountry, placeholder: "France")
@@ -747,7 +748,6 @@ struct WineWizardView: View {
         noteRegion = ""
         noteCountry = ""
         noteAbv = ""
-        showFlavorBrowse = false
         scanStatus = "Cadre l’étiquette — touche pour photo"
         duplicateDetail = ""
     }

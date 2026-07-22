@@ -15,11 +15,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,7 +35,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -200,6 +208,83 @@ fun WeenoSelectField(
                                 fontWeight = if (key == value) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 13.sp
                             )
+                        },
+                        onClick = {
+                            onChange(key)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Menu déroulant formulaire (couleur, etc.) — grand, joli, pas de chips. */
+@Composable
+fun WeenoFormSelectField(
+    label: String,
+    value: String,
+    options: List<Pair<String, String>>,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Choisir…",
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentLabel = options.firstOrNull { it.first == value }?.second
+        ?: if (value.isBlank()) placeholder else value
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label.isNotBlank()) {
+            Text(label, color = WineColors.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(4.dp))
+        }
+        Box {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
+                    .background(WineColors.fieldBg)
+                    .clickable { expanded = true }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    currentLabel,
+                    color = if (value.isBlank()) WineColors.muted else WineColors.text,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("▾", color = WineColors.muted, fontSize = 12.sp)
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .heightIn(max = 320.dp)
+                    .background(WineColors.card)
+            ) {
+                options.forEach { (key, lab) ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    lab,
+                                    color = if (key == value) WineColors.accent else WineColors.text,
+                                    fontWeight = if (key == value) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 15.sp
+                                )
+                                if (key == value) {
+                                    Text("✓", color = WineColors.accent, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         },
                         onClick = {
                             onChange(key)
@@ -382,46 +467,158 @@ fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier, showNumber: B
     }
 }
 
+/** Menu multi-sélection tags — dialogue liste + filtre (pas de chips). */
 @Composable
-fun WeenoColorChipPicker(value: String, onChange: (String) -> Unit) {
-    val options = listOf(
-        "" to "—",
-        "rouge" to "Rouge",
-        "blanc" to "Blanc",
-        "rose" to "Rosé",
-        "effervescent" to "Efferv.",
-        "orange" to "Orange",
-        "fortifie" to "Fortifié",
-        "autre" to "Autre",
-    )
-    FlowRowWrap {
-        options.forEach { (id, label) ->
-            val on = value == id || (id.isEmpty() && value.isEmpty())
-            TagChip(label, on) { onChange(id) }
-        }
-    }
-}
-
-@Composable
-fun WeenoFlavorBrowsePanel(
+fun WeenoTagDropdownField(
+    label: String,
     tags: List<String>,
     selected: Set<String>,
     maxCount: Int = 8,
+    modifier: Modifier = Modifier,
     onToggle: (String) -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(WineColors.bg.copy(alpha = 0.55f))
-            .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
-            .padding(10.dp)
-    ) {
-        FlowRowWrap {
-            tags.forEach { tag ->
-                val on = tag in selected
-                TagChip(tag, on) {
-                    if (on || selected.size < maxCount) onToggle(tag)
+    var open by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf("") }
+    val filtered = remember(tags, filter) {
+        val q = filter.trim().lowercase()
+        if (q.isEmpty()) tags else tags.filter { it.lowercase().contains(q) }
+    }
+    val summary = when {
+        selected.isEmpty() -> "Ajouter un tag prédéfini…"
+        selected.size <= 2 -> selected.sorted().joinToString(", ")
+        else -> "${selected.size} tags sélectionnés"
+    }
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (label.isNotBlank()) {
+            Text(label, color = WineColors.muted, fontSize = 12.sp)
+            Spacer(Modifier.height(4.dp))
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
+                .background(WineColors.fieldBg)
+                .clickable {
+                    filter = ""
+                    open = true
+                }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                summary,
+                color = if (selected.isEmpty()) WineColors.muted else WineColors.text,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text("▾", color = WineColors.muted, fontSize = 12.sp)
+        }
+        if (selected.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            selected.sorted().forEach { tag ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(tag, color = WineColors.accent, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        "retirer",
+                        color = WineColors.muted,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onToggle(tag) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+    if (open) {
+        Dialog(onDismissRequest = { open = false }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = WineColors.card,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Tags prédéfinis",
+                        color = WineColors.text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 17.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "${selected.size}/$maxCount sélectionnés",
+                        color = WineColors.muted,
+                        fontSize = 12.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = filter,
+                        onValueChange = { filter = it },
+                        placeholder = { Text("Filtrer…", color = WineColors.muted) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = WineColors.text,
+                            unfocusedTextColor = WineColors.text,
+                            focusedBorderColor = WineColors.accent,
+                            unfocusedBorderColor = WineColors.border,
+                            cursorColor = WineColors.accent,
+                            focusedContainerColor = WineColors.fieldBg,
+                            unfocusedContainerColor = WineColors.fieldBg
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .heightIn(max = 340.dp)
+                    ) {
+                        items(filtered, key = { it }) { tag ->
+                            val on = tag in selected
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (on || selected.size < maxCount) onToggle(tag)
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    tag,
+                                    color = if (on) WineColors.accent else WineColors.text,
+                                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 15.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    if (on) "✓" else "○",
+                                    color = if (on) WineColors.accent else WineColors.muted,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { open = false },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("OK", color = WineColors.accent, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
