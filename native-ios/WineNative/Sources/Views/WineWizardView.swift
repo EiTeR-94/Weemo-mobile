@@ -17,6 +17,8 @@ struct WineWizardView: View {
     @State private var vivinoVintage = ""
     @State private var vivinoResults: [VivinoHit] = []
     @State private var vivinoError: String?
+    @State private var searchBusy = false
+    @State private var searchTask: Task<Void, Never>?
     @State private var showManual = false
     @State private var manualName = ""
     @State private var manualProducer = ""
@@ -99,6 +101,10 @@ struct WineWizardView: View {
             app.wizardStep = newStep
             if newStep == 3 { Task { await loadNotation() } }
         })
+        // Suggestions Vivino live (parité webapp debounce ~320ms)
+        .onChange(of: vivinoQuery) { _ in scheduleLiveSearch() }
+        .onChange(of: vivinoProducer) { _ in scheduleLiveSearch() }
+        .onChange(of: vivinoVintage) { _ in scheduleLiveSearch() }
         .alert("Déjà dégustée", isPresented: $showDuplicate) {
             Button("Annuler", role: .cancel) {}
             Button("Noter à nouveau") { Task { await save(force: true) } }
@@ -163,64 +169,64 @@ struct WineWizardView: View {
             }
             .beerCard()
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Chercher sur Vivino")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Max 5 suggestions (le 1er est souvent le bon).")
-                    .font(.system(size: Theme.Font.lead * 0.94))
+                Text("Tape — suggestions en direct (max 5).")
+                    .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
                 WeenoField(label: "Domaine, cuvée…", text: $vivinoQuery, placeholder: "ex. Bachelet Saint-Aubin Le Charmois")
-                WeenoField(label: "Producteur", text: $vivinoProducer, placeholder: "ex. Domaine Nicolas")
-                WeenoField(label: "Millésime", text: $vivinoVintage, placeholder: "2019", keyboard: .numberPad)
-                WeenoPrimaryButton(
-                    title: busy ? "Recherche…" : "Chercher sur Vivino",
-                    disabled: vivinoQuery.trimmingCharacters(in: .whitespaces).count < 2
-                        && vivinoProducer.trimmingCharacters(in: .whitespaces).count < 2,
-                    busy: busy
-                ) {
-                    Task { await searchVivino() }
+                HStack(spacing: 8) {
+                    WeenoField(label: "Producteur", text: $vivinoProducer, placeholder: "ex. Domaine Nicolas")
+                    WeenoField(label: "Millésime", text: $vivinoVintage, placeholder: "2019", keyboard: .numberPad)
+                        .frame(maxWidth: 110)
                 }
-
+                if searchBusy {
+                    ProgressView().tint(Theme.accent).scaleEffect(0.8)
+                }
                 if let vivinoError {
-                    Text(vivinoError).font(.footnote).foregroundStyle(Theme.muted)
+                    Text(vivinoError).font(.caption).foregroundStyle(Theme.muted)
                 }
-                ForEach(vivinoResults) { hit in
+                ForEach(Array(vivinoResults.enumerated()), id: \.element.id) { idx, hit in
                     Button { Task { await selectVivino(hit) } } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Text("\(idx + 1)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(idx == 0 ? Theme.btnPrimaryText : Theme.muted)
+                                .frame(width: 20, height: 20)
+                                .background(idx == 0 ? Theme.accent : Theme.bg)
+                                .clipShape(Circle())
                             if let urlStr = hit.photoURL, let url = URL(string: urlStr) {
                                 AsyncImage(url: url) { phase in
                                     switch phase {
                                     case .success(let image):
                                         image.resizable().aspectRatio(contentMode: .fill)
-                                    case .failure:
-                                        RoundedRectangle(cornerRadius: 8).fill(Theme.card).overlay(Text("🍷").font(.caption2))
                                     default:
-                                        RoundedRectangle(cornerRadius: 8).fill(Theme.card).overlay(ProgressView().scaleEffect(0.6))
+                                        RoundedRectangle(cornerRadius: 6).fill(Theme.card).overlay(Text("🍷").font(.caption2))
                                     }
                                 }
-                                .frame(width: 44, height: 44)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .accessibilityLabel("Photo du vin depuis Vivino")
-                            } else {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Theme.card)
-                                    .frame(width: 44, height: 44)
-                                    .overlay(Text("🍷").font(.caption2).foregroundStyle(Theme.muted))
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(hit.wineName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
-                                Text([hit.producer, hit.styleFr].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.caption).foregroundStyle(Theme.muted)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(hit.wineName).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(2)
+                                Text([hit.producer, hit.country, hit.vintage.map(String.init)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.muted)
+                            Spacer(minLength: 0)
+                            if let r = hit.vivinoRating {
+                                Text(String(format: "%.1f", r))
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(Theme.star)
+                            }
                         }
-                        .padding(10)
-                        .background(Theme.bg)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(8)
+                        .background(idx == 0 ? Theme.accent.opacity(0.08) : Theme.bg)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+                    .buttonStyle(.plain)
                 }
 
                 DisclosureGroup("Saisie manuelle (secours)", isExpanded: $showManual) {
@@ -357,58 +363,77 @@ struct WineWizardView: View {
                     maxCount: 8
                 )
                 Button {
-                    showFlavorBrowse.toggle()
+                    withAnimation(.easeInOut(duration: 0.2)) { showFlavorBrowse.toggle() }
                 } label: {
-                    Text(showFlavorBrowse ? "Masquer les tags prédéfinis" : "Parcourir les tags prédéfinis…")
-                        .font(.system(size: Theme.Font.ghost, weight: .semibold))
+                    Text(showFlavorBrowse ? "Masquer les tags" : "Parcourir les tags prédéfinis…")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                 }
                 if showFlavorBrowse, !flavorTags.isEmpty {
-                    FlavorTagGrid(title: "Tags", tags: flavorTags, selected: $flavors, maxCount: 8)
+                    FlavorTagGrid(title: "", tags: flavorTags, selected: $flavors, maxCount: 8)
                 }
             }
             .beerCard()
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Détails")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
-                WeenoFormSelectField(
-                    label: "Couleur",
-                    value: noteColor,
-                    options: [
-                        ("", "—"),
-                        ("rouge", "Rouge"), ("blanc", "Blanc"), ("rose", "Rosé"),
-                        ("effervescent", "Effervescent"), ("orange", "Orange"),
-                        ("fortifie", "Fortifié"), ("autre", "Autre"),
-                    ],
-                    onSelect: { noteColor = $0 }
-                )
-                WeenoField(label: "Région", text: $noteRegion, placeholder: "ex. Saint-Aubin…")
-                WeenoField(label: "Pays", text: $noteCountry, placeholder: "France")
-                WeenoField(label: "Degré (%)", text: $noteAbv, placeholder: "13.5", keyboard: .decimalPad)
+                HStack(alignment: .top, spacing: 8) {
+                    WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Couleur")
+                            .font(.system(size: Theme.Font.field))
+                            .foregroundStyle(Theme.muted)
+                        Picker("Couleur", selection: $noteColor) {
+                            Text("—").tag("")
+                            Text("Rouge").tag("rouge")
+                            Text("Blanc").tag("blanc")
+                            Text("Rosé").tag("rose")
+                            Text("Effervescent").tag("effervescent")
+                            Text("Orange").tag("orange")
+                            Text("Fortifié").tag("fortifie")
+                            Text("Autre").tag("autre")
+                        }
+                        .pickerStyle(.menu)
+                        .tint(Theme.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.fieldBg)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+                HStack(spacing: 8) {
+                    WeenoField(label: "Région", text: $noteRegion, placeholder: "Saint-Aubin…")
+                    WeenoField(label: "Pays", text: $noteCountry, placeholder: "France")
+                }
+                WeenoField(label: "Degré %", text: $noteAbv, placeholder: "13.5", keyboard: .decimalPad)
+                    .frame(maxWidth: 140)
             }
             .beerCard()
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Commentaire")
-                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
-                    .foregroundStyle(Theme.text)
+                HStack {
+                    Text("Commentaire")
+                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                    Text("\(comment.count)/500")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                }
                 TextField("Nez, bouche, accord…", text: $comment, axis: .vertical)
-                    .lineLimit(2...5)
+                    .lineLimit(2...4)
                     .onChange(of: comment, perform: { v in
                         if v.count > 500 { comment = String(v.prefix(500)) }
                     })
-                    .padding(12)
+                    .padding(10)
                     .background(Theme.fieldBg)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(Theme.text)
-                Text("\(comment.count)/500")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .beerCard()
 
@@ -505,26 +530,48 @@ struct WineWizardView: View {
         step = 2
     }
 
-    private func searchVivino() async {
-        var parts = [vivinoQuery, vivinoProducer, vivinoVintage]
+    private func scheduleLiveSearch() {
+        searchTask?.cancel()
+        let q = [vivinoQuery, vivinoProducer, vivinoVintage]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard q.count >= 2 else {
+            vivinoResults = []
+            vivinoError = nil
+            return
+        }
+        // Ne pas lancer si un vin est déjà sélectionné
+        if product != nil, !(product?.wineName.isEmpty ?? true) { return }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 320_000_000)
+            guard !Task.isCancelled else { return }
+            await searchVivino(silent: true)
+        }
+    }
+
+    private func searchVivino(silent: Bool = false) async {
+        let parts = [vivinoQuery, vivinoProducer, vivinoVintage]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let q = parts.joined(separator: " ")
         guard q.count >= 2 else { return }
-        busy = true
+        if silent { searchBusy = true } else { busy = true }
         vivinoError = nil
-        defer { busy = false }
+        defer {
+            if silent { searchBusy = false } else { busy = false }
+        }
         do {
             let res = try await app.api.vivinoSearch(query: q)
             if res.ok, let hits = res.results, !hits.isEmpty {
-                vivinoResults = hits
+                vivinoResults = Array(hits.prefix(5))
             } else {
                 vivinoResults = []
-                vivinoError = res.error ?? "Aucun résultat"
+                if !silent { vivinoError = res.error ?? "Aucun résultat" }
             }
         } catch let err {
             vivinoResults = []
-            vivinoError = err.localizedDescription
+            if !silent { vivinoError = err.localizedDescription }
         }
     }
 

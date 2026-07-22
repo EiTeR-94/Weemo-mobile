@@ -247,8 +247,8 @@ struct WeenoPreviewCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.ok, lineWidth: 2))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.ok, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var metaLine: String {
@@ -483,11 +483,13 @@ struct FlavorTagGrid: View {
     let maxCount: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: Theme.Font.tagTitle))
-                .foregroundStyle(Theme.muted)
-            FlowLayout(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: Theme.Font.tagTitle))
+                    .foregroundStyle(Theme.muted)
+            }
+            FlowLayout(spacing: 5) {
                 ForEach(tags, id: \.self) { tag in
                     let on = selected.contains(tag)
                     Button {
@@ -495,14 +497,15 @@ struct FlavorTagGrid: View {
                         else if selected.count < maxCount { selected.insert(tag) }
                     } label: {
                         Text(tag)
-                            .font(.system(size: Theme.Font.tag))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(on ? Theme.accent.opacity(0.2) : Theme.card)
+                            .font(.system(size: 11.5))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(on ? Theme.accent.opacity(0.22) : Theme.bg)
                             .foregroundStyle(on ? Theme.accent : Theme.text)
-                            .overlay(Capsule().stroke(on ? Theme.accent : Theme.border))
+                            .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 0.5))
                             .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }

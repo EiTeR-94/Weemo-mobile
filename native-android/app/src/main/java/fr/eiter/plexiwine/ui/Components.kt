@@ -431,7 +431,7 @@ fun WeenoCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(WineColors.card)
-            .border(1.dp, WineColors.border, RoundedCornerShape(14.dp))
+            .border(0.5.dp, WineColors.border, RoundedCornerShape(12.dp))
             .padding(14.dp),
         content = content
     )
@@ -444,7 +444,7 @@ fun WeenoPreviewCard(product: WineProduct) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(WineColors.card)
-            .border(2.dp, WineColors.ok, RoundedCornerShape(14.dp))
+            .border(1.dp, WineColors.ok, RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
         Text("✓ Sélectionné", color = WineColors.ok, fontWeight = FontWeight.Bold, fontSize = 11.sp)
@@ -569,8 +569,10 @@ fun FlavorTagGrid(
     onToggle: (String) -> Unit
 ) {
     Column {
-        Text(title, color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.6.sp)
-        Spacer(Modifier.height(8.dp))
+        if (title.isNotBlank()) {
+            Text(title, color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.6.sp)
+            Spacer(Modifier.height(6.dp))
+        }
         FlowRowWrap {
             tags.forEach { tag ->
                 val isOn = tag in selected

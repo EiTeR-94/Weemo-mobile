@@ -55,19 +55,19 @@ extension Color {
 struct CardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding()
+            .padding(12)
             .background(Theme.card)
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .beerShadow()
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .beerShadow(radius: 3, y: 1)
     }
 }
 
 extension View {
     func beerCard() -> some View { modifier(CardStyle()) }
 
-    func beerShadow(radius: CGFloat = 6, y: CGFloat = 2) -> some View {
-        shadow(color: .black.opacity(0.28), radius: radius, x: 0, y: y)
+    func beerShadow(radius: CGFloat = 3, y: CGFloat = 1) -> some View {
+        shadow(color: .black.opacity(0.18), radius: radius, x: 0, y: y)
     }
 
     func beerSheetChrome() -> some View {

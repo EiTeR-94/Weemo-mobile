@@ -924,7 +924,10 @@ class WineAPI private constructor(context: Context) {
         vivinoId: String,
         force: Boolean,
         photoJPEG: ByteArray? = null,
-        location: String = ""
+        location: String = "",
+        vintage: Int? = null,
+        region: String = "",
+        country: String = ""
     ): CreateCheckinResult = withContext(Dispatchers.IO) {
         var photoPath: String? = null
         if (photoJPEG != null && photoJPEG.isNotEmpty()) {
@@ -959,6 +962,9 @@ class WineAPI private constructor(context: Context) {
         if (vivinoId.isNotBlank()) {
             payload["vivino_id"] = vivinoId.toIntOrNull() ?: vivinoId
         }
+        if (vintage != null && vintage > 0) payload["vintage"] = vintage
+        if (region.isNotBlank()) payload["region"] = region.trim()
+        if (country.isNotBlank()) payload["country"] = country.trim()
         val json = gson.toJson(payload)
         val req = requestBuilder("api/checkins").post(json.toRequestBody(JSON)).build()
         val (body, code) = execute(req)

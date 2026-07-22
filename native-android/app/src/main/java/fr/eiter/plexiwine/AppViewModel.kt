@@ -956,7 +956,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 vivinoId = pending.vivinoId,
                 force = force,
                 photoJPEG = bytes,
-                location = loc
+                location = loc,
+                vintage = product.vintage,
+                region = product.region.orEmpty(),
+                country = product.country.orEmpty()
             )
             if (result.duplicate == true) {
                 val pc = result.previousCheckin
