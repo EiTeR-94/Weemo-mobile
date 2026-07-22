@@ -1199,13 +1199,29 @@ private fun WeenoWizard(vm: AppViewModel) {
                     else "Scan partiel — suggestions Vivino"
                     vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
                 } else if (scan.aiAvailable) {
-                    scanStatus = "Étiquette lue — cherche sur Vivino"
+                    scanStatus = scan.hint
+                        ?: "Étiquette lue — aucun candidat Vivino, cherche ou saisis"
+                    if (vivinoQuery.length >= 2) {
+                        // laisse l’utilisateur chercher ; query déjà préremplie
+                    }
                 } else {
                     showManual = true
-                    scanStatus = scan.aiError ?: "Scan indisponible — saisis ou cherche sur Vivino"
+                    val raw = (scan.aiError ?: scan.hint ?: "").lowercase()
+                    scanStatus = when {
+                        !scan.hint.isNullOrBlank() -> scan.hint!!
+                        !scan.aiError.isNullOrBlank() -> scan.aiError!!
+                        raw.contains("429") || raw.contains("quota") || raw.contains("rate") ->
+                            "Scan temporairement saturé — réessaie ou saisie manuelle"
+                        else -> "Scan indisponible — saisis ou cherche sur Vivino"
+                    }
                 }
             } catch (e: Exception) {
-                scanStatus = e.message ?: "Erreur scan"
+                val m = e.message ?: "Erreur scan"
+                scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
+                    "Erreur lecture réponse scan — mets à jour l’app"
+                } else {
+                    m
+                }
             } finally {
                 busy = false
             }
@@ -1382,11 +1398,19 @@ private fun WeenoWizard(vm: AppViewModel) {
                                         vivinoResults = scan.candidates.take(5)
                                         scanStatus = "Étiquette lue — choisis le bon vin"
                                         vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
+                                    } else if (scan.aiAvailable) {
+                                        scanStatus = scan.hint
+                                            ?: "Étiquette lue — aucun candidat, cherche sur Vivino"
                                     } else {
-                                        scanStatus = scan.aiError ?: "Aucun candidat — cherche sur Vivino"
+                                        showManual = true
+                                        scanStatus = scan.hint ?: scan.aiError
+                                            ?: "Aucun candidat — cherche sur Vivino"
                                     }
                                 } catch (e: Exception) {
-                                    scanStatus = e.message ?: "Erreur"
+                                    val m = e.message ?: "Erreur"
+                                    scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
+                                        "Erreur lecture réponse scan — mets à jour l’app"
+                                    } else m
                                 } finally {
                                     busy = false
                                 }

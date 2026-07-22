@@ -197,7 +197,10 @@ data class VivinoHit(
 data class LabelScanResult(
     val ok: Boolean = true,
     val aiAvailable: Boolean = false,
+    /** Message utilisateur (hint serveur, message IA, ou code erreur). */
     val aiError: String? = null,
+    /** Hint amical serveur si présent (quota, pas de clé, Vivino KO…). */
+    val hint: String? = null,
     val wineName: String? = null,
     val producer: String? = null,
     val wineColor: String? = null,

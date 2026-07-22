@@ -1271,29 +1271,27 @@ final class WineAPI {
 
     /// Parse un item Vivino backend (vivino_id, wine_name, photo_url…).
     static func mapVivinoItem(_ it: [String: Any]) -> VivinoHit? {
-        let name = (it["wine_name"] as? String) ?? (it["name"] as? String) ?? ""
+        let name = jsonString(it["wine_name"]) ?? jsonString(it["name"]) ?? ""
         guard !name.isEmpty else { return nil }
         let id = jsonInt(it["vivino_id"]) ?? jsonInt(it["id"]) ?? 0
         let vintage = jsonInt(it["vintage"])
-        let rating: Double?
-        if let d = it["vivino_rating"] as? Double { rating = d }
-        else if let n = it["vivino_rating"] as? NSNumber { rating = n.doubleValue }
-        else { rating = nil }
+        let rating = jsonDouble(it["vivino_rating"])
         return VivinoHit(
             bid: id,
             wineName: name,
-            producer: (it["producer"] as? String) ?? (it["winery"] as? String),
-            styleFr: (it["wine_color"] as? String) ?? (it["type"] as? String),
-            photoURL: (it["photo_url"] as? String) ?? (it["image"] as? String),
+            producer: jsonString(it["producer"]) ?? jsonString(it["winery"]),
+            styleFr: jsonString(it["wine_color"]) ?? jsonString(it["type"]),
+            photoURL: jsonString(it["photo_url"]) ?? jsonString(it["image"]),
             vintage: vintage,
-            country: it["country"] as? String,
-            region: it["region"] as? String,
+            country: jsonString(it["country"]),
+            region: jsonString(it["region"]),
             vivinoRating: rating,
-            vivinoURL: it["vivino_url"] as? String
+            vivinoURL: jsonString(it["vivino_url"])
         )
     }
 
     static func jsonInt(_ any: Any?) -> Int? {
+        if any is NSNull { return nil }
         if let i = any as? Int { return i }
         if let n = any as? NSNumber { return n.intValue }
         if let d = any as? Double { return Int(d) }
@@ -1302,11 +1300,34 @@ final class WineAPI {
     }
 
     static func jsonDouble(_ any: Any?) -> Double? {
+        if any is NSNull { return nil }
         if let d = any as? Double { return d }
         if let n = any as? NSNumber { return n.doubleValue }
         if let i = any as? Int { return Double(i) }
         if let s = any as? String { return Double(s) }
         return nil
+    }
+
+    static func jsonString(_ any: Any?) -> String? {
+        if any == nil || any is NSNull { return nil }
+        if let s = any as? String {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        if let n = any as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    static func jsonBool(_ any: Any?, default defaultValue: Bool = false) -> Bool {
+        if any == nil || any is NSNull { return defaultValue }
+        if let b = any as? Bool { return b }
+        if let n = any as? NSNumber { return n.boolValue }
+        if let s = any as? String {
+            let t = s.lowercased()
+            if t == "true" || t == "1" || t == "yes" { return true }
+            if t == "false" || t == "0" || t == "no" { return false }
+        }
+        return defaultValue
     }
 
     func saveProduct(barcode: String, wineName: String, producer: String, style: String) async throws -> LookupResponse {
@@ -1378,25 +1399,51 @@ final class WineAPI {
         )
         let (data, http, _) = try await performTransport(req)
         try throwIfUnauthorized(http.statusCode)
+        if http.statusCode >= 400 {
+            let snippet = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines).prefix(160)
+            return LabelScanResult(
+                ok: false,
+                aiAvailable: false,
+                aiError: "Scan KO (\(http.statusCode))" + (snippet.map { " — \($0)" } ?? ""),
+                hint: "Réessaie ou saisis / cherche sur Vivino.",
+                wineName: nil, producer: nil, wineColor: nil, vintage: nil, abv: nil, region: nil,
+                candidates: [], vivinoQuery: nil, labelPhotoPath: nil
+            )
+        }
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw WineAPIError.decode
         }
         let ai = root["ai"] as? [String: Any]
-        let fields = ai?["fields"] as? [String: Any] ?? [:]
-        let cands = (root["candidates"] as? [[String: Any]] ?? []).compactMap { Self.mapVivinoItem($0) }
+        let fields = (ai?["fields"] as? [String: Any])
+            ?? (root["fields"] as? [String: Any])
+            ?? [:]
+        // Cast robuste : JSONSerialization donne souvent [Any] d’NSDictionary, pas [[String: Any]]
+        let rawCands: [Any] = (root["candidates"] as? [Any]) ?? []
+        let cands = rawCands.compactMap { el -> VivinoHit? in
+            guard let dict = el as? [String: Any] else { return nil }
+            return Self.mapVivinoItem(dict)
+        }
+        let hint = Self.jsonString(root["hint"])
+            ?? Self.jsonString(root["ai_hint"])
+            ?? Self.jsonString(ai?["message"])
+        let errCode = Self.jsonString(ai?["error"])
+        let aiError = hint ?? Self.jsonString(root["ai_error"]) ?? errCode
         return LabelScanResult(
-            ok: (root["ok"] as? Bool) ?? true,
-            aiAvailable: (ai?["available"] as? Bool) ?? false,
-            aiError: ai?["error"] as? String,
-            wineName: fields["wine_name"] as? String,
-            producer: fields["producer"] as? String,
-            wineColor: fields["wine_color"] as? String,
-            vintage: Self.jsonInt(fields["vintage"]),
-            abv: Self.jsonDouble(fields["abv"]),
-            region: fields["region"] as? String,
+            ok: Self.jsonBool(root["ok"], default: true),
+            aiAvailable: Self.jsonBool(ai?["available"]) || Self.jsonBool(root["ai_available"]),
+            aiError: aiError,
+            hint: hint,
+            wineName: Self.jsonString(fields["wine_name"]) ?? Self.jsonString(root["wine_name"]),
+            producer: Self.jsonString(fields["producer"]) ?? Self.jsonString(root["producer"]),
+            wineColor: Self.jsonString(fields["wine_color"])
+                ?? Self.jsonString(fields["color"])
+                ?? Self.jsonString(root["wine_color"]),
+            vintage: Self.jsonInt(fields["vintage"]) ?? Self.jsonInt(root["vintage"]),
+            abv: Self.jsonDouble(fields["abv"]) ?? Self.jsonDouble(root["abv"]),
+            region: Self.jsonString(fields["region"]) ?? Self.jsonString(root["region"]),
             candidates: cands,
-            vivinoQuery: root["vivino_query"] as? String,
-            labelPhotoPath: root["label_photo_path"] as? String
+            vivinoQuery: Self.jsonString(root["vivino_query"]),
+            labelPhotoPath: Self.jsonString(root["label_photo_path"])
         )
     }
 

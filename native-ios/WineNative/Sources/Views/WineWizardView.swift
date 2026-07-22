@@ -547,16 +547,19 @@ struct WineWizardView: View {
                 scanStatus = "Étiquette lue — tape le bon vin (\(scan.candidates.count) suggestion(s))"
                 app.showToast("\(scan.candidates.count) suggestion(s)", variant: .success)
             } else if scan.aiAvailable {
-                scanStatus = "Étiquette lue — aucun candidat Vivino, affine la recherche"
+                scanStatus = scan.hint
+                    ?? "Étiquette lue — aucun candidat Vivino, affine la recherche"
                 if vivinoQuery.count >= 2 { await searchVivino() }
             } else {
-                let raw = (scan.aiError ?? "").lowercased()
-                if raw.contains("429") || raw.contains("quota") || raw.contains("rate") {
+                let raw = (scan.aiError ?? scan.hint ?? "").lowercased()
+                if let h = scan.hint, !h.isEmpty {
+                    scanStatus = h
+                } else if raw.contains("429") || raw.contains("quota") || raw.contains("rate") {
                     scanStatus = "Scan temporairement saturé — réessaie dans 1 min ou saisie manuelle"
-                } else if raw.contains("clé") || raw.contains("key") || raw.contains("aucune") {
+                } else if raw.contains("clé") || raw.contains("key") || raw.contains("aucune") || raw.contains("no_provider") {
                     scanStatus = "Scan IA indisponible (config serveur) — saisie / Vivino manuelle"
-                } else if !raw.isEmpty {
-                    scanStatus = "Échec scan : \(scan.aiError!.prefix(120))"
+                } else if let err = scan.aiError, !err.isEmpty {
+                    scanStatus = "Échec scan : \(err.prefix(140))"
                 } else {
                     scanStatus = "Scan indisponible — saisis le vin ou cherche sur Vivino"
                 }

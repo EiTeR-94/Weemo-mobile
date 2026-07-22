@@ -697,29 +697,74 @@ class WineAPI private constructor(context: Context) {
         execute(requestBuilder("api/checkins/$id/photo").delete().build())
     }
 
+    /**
+     * Gson renvoie un [com.google.gson.JsonNull] (≠ null Kotlin) pour `"key": null`.
+     * `.asString` / `.asBoolean` sur JsonNull → UnsupportedOperationException("JsonNull").
+     */
+    private fun jsonString(el: com.google.gson.JsonElement?): String? {
+        if (el == null || el.isJsonNull) return null
+        return try {
+            when {
+                el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString
+                el.isJsonPrimitive -> el.asString // nombres / bool → string
+                else -> null
+            }?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun jsonBool(el: com.google.gson.JsonElement?, default: Boolean = false): Boolean {
+        if (el == null || el.isJsonNull) return default
+        return try {
+            when {
+                el.isJsonPrimitive && el.asJsonPrimitive.isBoolean -> el.asBoolean
+                el.isJsonPrimitive && el.asJsonPrimitive.isNumber -> el.asInt != 0
+                el.isJsonPrimitive && el.asJsonPrimitive.isString ->
+                    el.asString.equals("true", true) || el.asString == "1"
+                else -> default
+            }
+        } catch (_: Exception) {
+            default
+        }
+    }
+
+    private fun jsonDouble(el: com.google.gson.JsonElement?): Double? {
+        if (el == null || el.isJsonNull) return null
+        return try {
+            when {
+                el.isJsonPrimitive && el.asJsonPrimitive.isNumber -> el.asDouble
+                el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.toDoubleOrNull()
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun jsonInt(el: com.google.gson.JsonElement?): Int? {
         if (el == null || el.isJsonNull) return null
         return try { el.asInt } catch (_: Exception) {
             try { el.asDouble.toInt() } catch (_: Exception) {
-                el.asString.toIntOrNull()
+                try { el.asString.toIntOrNull() } catch (_: Exception) { null }
             }
         }
     }
 
     private fun mapVivinoItem(o: com.google.gson.JsonObject): VivinoHit? {
-        val name = o.get("wine_name")?.asString ?: o.get("name")?.asString ?: return null
+        val name = jsonString(o.get("wine_name")) ?: jsonString(o.get("name")) ?: return null
         if (name.isBlank()) return null
         return VivinoHit(
             bid = jsonInt(o.get("vivino_id")) ?: jsonInt(o.get("id")) ?: 0,
             wineName = name,
-            producer = o.get("producer")?.asString ?: o.get("winery")?.asString,
-            styleFr = o.get("wine_color")?.asString ?: o.get("type")?.asString,
-            photoURL = o.get("photo_url")?.asString ?: o.get("image")?.asString,
+            producer = jsonString(o.get("producer")) ?: jsonString(o.get("winery")),
+            styleFr = jsonString(o.get("wine_color")) ?: jsonString(o.get("type")),
+            photoURL = jsonString(o.get("photo_url")) ?: jsonString(o.get("image")),
             vintage = jsonInt(o.get("vintage")),
-            country = o.get("country")?.asString,
-            region = o.get("region")?.asString,
-            vivinoRating = try { o.get("vivino_rating")?.asDouble } catch (_: Exception) { null },
-            vivinoURL = o.get("vivino_url")?.asString
+            country = jsonString(o.get("country")),
+            region = jsonString(o.get("region")),
+            vivinoRating = jsonDouble(o.get("vivino_rating")),
+            vivinoURL = jsonString(o.get("vivino_url"))
         )
     }
 
@@ -860,27 +905,62 @@ class WineAPI private constructor(context: Context) {
                 jpeg.toRequestBody("image/jpeg".toMediaType())
             )
             .build()
-        val (respBody, _) = execute(requestBuilder("api/label-scan").post(body).build())
-        val root = com.google.gson.JsonParser.parseString(respBody).asJsonObject
-        val ai = root.getAsJsonObject("ai")
-        val fields = ai?.getAsJsonObject("fields")
+        val (respBody, code) = execute(requestBuilder("api/label-scan").post(body).build())
+        if (code >= 400) {
+            // Ne pas laisser Gson planter sur un body HTML/erreur : message clair
+            val snippet = respBody.trim().take(160).ifBlank { "HTTP $code" }
+            return LabelScanResult(
+                ok = false,
+                aiAvailable = false,
+                aiError = "Scan KO ($code) — $snippet",
+                hint = "Réessaie ou saisis / cherche sur Vivino."
+            )
+        }
+        val root = try {
+            com.google.gson.JsonParser.parseString(respBody).asJsonObject
+        } catch (e: Exception) {
+            return LabelScanResult(
+                ok = false,
+                aiAvailable = false,
+                aiError = "Réponse scan illisible",
+                hint = e.message
+            )
+        }
+        val ai = root.get("ai")?.takeIf { it.isJsonObject }?.asJsonObject
+        val fields = ai?.get("fields")?.takeIf { it.isJsonObject }?.asJsonObject
+            ?: root.get("fields")?.takeIf { it.isJsonObject }?.asJsonObject
         val cands = mutableListOf<VivinoHit>()
         root.getAsJsonArray("candidates")?.forEach { el ->
-            mapVivinoItem(el.asJsonObject)?.let { cands.add(it) }
+            if (el != null && el.isJsonObject) {
+                mapVivinoItem(el.asJsonObject)?.let { cands.add(it) }
+            }
         }
+        // Messages amicaux serveur (hint / ai.message / ai_error) — pas seulement le code "error"
+        val hint = jsonString(root.get("hint"))
+            ?: jsonString(root.get("ai_hint"))
+            ?: jsonString(ai?.get("message"))
+        val errCode = jsonString(ai?.get("error"))
+        val aiError = hint
+            ?: jsonString(root.get("ai_error"))
+            ?: errCode
         return LabelScanResult(
-            ok = root.get("ok")?.asBoolean ?: true,
-            aiAvailable = ai?.get("available")?.asBoolean ?: false,
-            aiError = ai?.get("error")?.asString,
-            wineName = fields?.get("wine_name")?.asString,
-            producer = fields?.get("producer")?.asString,
-            wineColor = fields?.get("wine_color")?.asString,
-            vintage = jsonInt(fields?.get("vintage")),
-            abv = fields?.get("abv")?.let { runCatching { it.asDouble }.getOrNull() },
-            region = fields?.get("region")?.asString,
+            ok = jsonBool(root.get("ok"), default = true),
+            aiAvailable = jsonBool(ai?.get("available"))
+                || jsonBool(root.get("ai_available")),
+            aiError = aiError,
+            hint = hint,
+            // champs IA + fallback plat racine (API /api/label-scan)
+            wineName = jsonString(fields?.get("wine_name")) ?: jsonString(root.get("wine_name")),
+            producer = jsonString(fields?.get("producer")) ?: jsonString(root.get("producer")),
+            wineColor = jsonString(fields?.get("wine_color"))
+                ?: jsonString(fields?.get("color"))
+                ?: jsonString(root.get("wine_color")),
+            vintage = jsonInt(fields?.get("vintage")) ?: jsonInt(root.get("vintage")),
+            abv = jsonDouble(fields?.get("abv")) ?: jsonDouble(root.get("abv")),
+            region = jsonString(fields?.get("region")) ?: jsonString(root.get("region")),
             candidates = cands,
-            vivinoQuery = root.get("vivino_query")?.asString,
-            labelPhotoPath = root.get("label_photo_path")?.asString
+            vivinoQuery = jsonString(root.get("vivino_query")),
+            labelPhotoPath = jsonString(root.get("label_photo_path"))
         )
     }
 

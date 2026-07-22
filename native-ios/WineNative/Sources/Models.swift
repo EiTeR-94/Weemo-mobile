@@ -611,7 +611,10 @@ struct VivinoHit: Decodable, Identifiable, Hashable {
 struct LabelScanResult {
     let ok: Bool
     let aiAvailable: Bool
+    /// Message utilisateur (hint serveur, message IA, ou code erreur).
     let aiError: String?
+    /// Hint amical serveur si présent (quota, pas de clé, Vivino KO…).
+    let hint: String?
     let wineName: String?
     let producer: String?
     let wineColor: String?
