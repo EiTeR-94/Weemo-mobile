@@ -316,9 +316,10 @@ struct WeenoTagDropdownField: View {
                 .preferredColorScheme(.dark)
             }
             // Téléphone : demi-écran compact par défaut (pas full-screen)
+            // Note: pas de presentationContentInteraction — API iOS 16.4+ alors que
+            // deployment target = 16.0 (CI xcodebuild échoue sinon).
             .presentationDetents([.height(280), .height(380), .fraction(0.55)], selection: $sheetDetent)
             .presentationDragIndicator(.visible)
-            .presentationContentInteraction(.scrolls)
             .onAppear {
                 filter = ""
                 sheetDetent = .height(280)
