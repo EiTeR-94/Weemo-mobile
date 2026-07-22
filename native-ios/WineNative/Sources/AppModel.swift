@@ -80,7 +80,7 @@ final class AppModel: ObservableObject {
     /// Check MAJ en cours (bouton header / menu).
     @Published var isCheckingMaj = false
     var portalURL: URL {
-        URL(string: ServerSettings.portalURLString) ?? URL(string: "https://eiter.freeboxos.fr/mobile/wine/")!
+        URL(string: ServerSettings.portalURLString) ?? URL(string: "https://eiter.freeboxos.fr/mobile/wine-bis/")!
     }
 
     private var celebQueue: [RpgCelebration] = []

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Écrit /var/www/wine-bis-mobile/versions.json (+ miroir portail) à partir des artefacts publiés.
-# Dates IPA / APK séparées (mtime fichier) pour éviter la confusion quand seule l'IPA bouge.
+# Écrit /var/www/wine-bis-mobile/versions.json à partir des artefacts WeenoBis publiés.
 set -euo pipefail
 
 DEST="${WINE_MOBILE_WEB_DIR:-/var/www/wine-bis-mobile}"
 WEBAPP_VER_FILE="${WINE_VERSION_FILE:-/home/eiter/wine/VERSION}"
 AAPT="${AAPT:-/home/eiter/Android/Sdk/build-tools/34.0.0/aapt}"
+PORTAL_URL="${WINE_BIS_PORTAL_URL:-https://eiter.freeboxos.fr/mobile/wine-bis/}"
 
 fmt_mtime() {
   local f="$1"
@@ -19,11 +19,9 @@ fmt_mtime() {
 IOS_VER="?"
 IOS_BUILD="?"
 IPA=""
-if [[ -f "$DEST/WeenoOff.ipa" ]]; then
-  IPA="$DEST/WeenoOff.ipa"
-elif [[ -f "$DEST/weenooff.ipa" ]]; then
-  IPA="$DEST/weenooff.ipa"
-fi
+for c in "$DEST/WeenoBis.ipa" "$DEST/weenobis.ipa" "$DEST/WeenoOff.ipa" "$DEST/weenooff.ipa"; do
+  [[ -f "$c" ]] && IPA="$c" && break
+done
 if [[ -n "$IPA" ]]; then
   read -r IOS_VER IOS_BUILD < <(python3 - "$IPA" <<'PY'
 import sys, zipfile, plistlib
@@ -43,7 +41,7 @@ IOS_UPDATED=$(fmt_mtime "${IPA:-}")
 AND_VER="?"
 AND_BUILD="?"
 APK=""
-for c in "$DEST/WeenoOff.apk" "$DEST/weenooff.apk"; do
+for c in "$DEST/WeenoBis.apk" "$DEST/weenobis.apk" "$DEST/WeenoOff.apk" "$DEST/weenooff.apk"; do
   [[ -f "$c" ]] && APK="$c" && break
 done
 if [[ -n "$APK" && -x "$AAPT" ]]; then
@@ -59,7 +57,6 @@ WEBAPP="?"
 [[ -f "$WEBAPP_VER_FILE" ]] && WEBAPP=$(tr -d ' \n' < "$WEBAPP_VER_FILE")
 WEB_UPDATED=$(fmt_mtime "$WEBAPP_VER_FILE")
 
-# Date de génération du manifeste (pas « dernière maj app »)
 GENERATED=$(TZ=Europe/Paris date +"%d-%m-%Y %H:%M")
 GENERATED_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -68,7 +65,8 @@ python3 - "$TMP" \
   "$IOS_VER" "$IOS_BUILD" "$IOS_UPDATED" \
   "$AND_VER" "$AND_BUILD" "$AND_UPDATED" \
   "$WEBAPP" "$WEB_UPDATED" \
-  "$GENERATED" "$GENERATED_ISO" <<'PY'
+  "$GENERATED" "$GENERATED_ISO" \
+  "$PORTAL_URL" <<'PY'
 import json, sys
 (
     path,
@@ -76,7 +74,8 @@ import json, sys
     andv, ab, and_upd,
     web, web_upd,
     generated, generated_iso,
-) = sys.argv[1:12]
+    portal,
+) = sys.argv[1:13]
 
 doc = {
     "ios": ios,
@@ -87,17 +86,16 @@ doc = {
     "android_updated_at": and_upd or None,
     "webapp": web,
     "webapp_updated_at": web_upd or None,
-    # Génération du JSON (pas la date d’une plateforme)
     "manifest_generated_at": generated,
-    "updated_at": generated,  # rétrocompat affichage
+    "updated_at": generated,
     "updated_at_iso": generated_iso,
-    "portal_url": "https://eiter.freeboxos.fr/mobile/wine/",
-    "note": "L’IPA et l’APK ont des cycles de maj séparés. Compare la version de ta plateforme.",
+    "portal_url": portal,
+    "note": "WeenoBis — IPA/APK natives, scan Vivino device-side. Portail séparé de Weeno.",
 }
 with open(path, "w", encoding="utf-8") as f:
     json.dump(doc, f, indent=2, ensure_ascii=False)
     f.write("\n")
-print(json.dumps(doc, ensure_ascii=False))
+print(json.dumps(doc, ensure_ascii=False, indent=2))
 PY
 
 sudo install -m 644 -o www-data -g www-data "$TMP" "$DEST/versions.json"
@@ -106,6 +104,7 @@ mkdir -p "$ROOT/web-portal"
 cp -f "$TMP" "$ROOT/web-portal/versions.json"
 rm -f "$TMP"
 echo "versions.json → $DEST/versions.json"
-echo "  IPA  $IOS_VER ($IOS_BUILD) · maj $IOS_UPDATED"
-echo "  APK  $AND_VER ($AND_BUILD) · maj $AND_UPDATED"
+echo "  IPA  $IOS_VER ($IOS_BUILD) · maj $IOS_UPDATED · $IPA"
+echo "  APK  $AND_VER ($AND_BUILD) · maj $AND_UPDATED · $APK"
 echo "  Web  $WEBAPP · maj $WEB_UPDATED"
+echo "  portal_url=$PORTAL_URL"
