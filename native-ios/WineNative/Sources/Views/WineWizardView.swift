@@ -9,7 +9,7 @@ struct WineWizardView: View {
 
     @State private var scannedCode = ""
     @State private var product: WineProduct?
-    @State private var scanStatus = "Cadre l’étiquette — touche pour photo"
+    @State private var scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
     @State private var busy = false
     @State private var labelPreview: UIImage?
 
@@ -105,7 +105,14 @@ struct WineWizardView: View {
             }
         }
         .fullScreenCover(isPresented: $showScanCamera) {
-            CameraPicker { image in Task { await processScanPhoto(image) } }
+            LabelAutoScannerView(
+                onCapture: { image in
+                    showScanCamera = false
+                    Task { await processScanPhoto(image) }
+                },
+                onCancel: { showScanCamera = false }
+            )
+            .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showTastingCamera) {
             CameraPicker { image in Task { await processTastingPhoto(image) } }
@@ -192,7 +199,7 @@ struct WineWizardView: View {
                         } else {
                             VStack(spacing: 8) {
                                 Text("🍾").font(.system(size: 36))
-                                Text("Cadre l’étiquette")
+                                Text("Caméra live — auto-scan")
                                     .font(.system(size: Theme.Font.lead, weight: .semibold))
                                     .foregroundStyle(Theme.text)
                                 Text("touche pour prendre une photo")
@@ -785,7 +792,7 @@ struct WineWizardView: View {
     private func clearProduct() {
         product = nil
         vivinoResults = []
-        scanStatus = "Cadre l’étiquette — touche pour photo"
+        scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
     }
 
     private func addToWishlist(_ product: WineProduct) async {
@@ -832,7 +839,7 @@ struct WineWizardView: View {
         noteRegion = ""
         noteCountry = ""
         noteAbv = ""
-        scanStatus = "Cadre l’étiquette — touche pour photo"
+        scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
         duplicateDetail = ""
     }
 }

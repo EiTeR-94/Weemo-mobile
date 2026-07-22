@@ -1055,9 +1055,10 @@ private fun WeenoWizard(vm: AppViewModel) {
     val api = vm.api
 
     var product by remember { mutableStateOf<WineProduct?>(null) }
-    var scanStatus by remember { mutableStateOf("Cadre l’étiquette — touche pour photo") }
+    var scanStatus by remember { mutableStateOf("Ouvre la caméra — détection auto de l’étiquette") }
     var busy by remember { mutableStateOf(false) }
     var labelPhotoFile by remember { mutableStateOf<File?>(null) }
+    var showLabelScanner by remember { mutableStateOf(false) }
     var vivinoQuery by remember { mutableStateOf("") }
     var vivinoProducer by remember { mutableStateOf("") }
     var vivinoVintage by remember { mutableStateOf("") }
@@ -1143,7 +1144,7 @@ private fun WeenoWizard(vm: AppViewModel) {
 
     fun resetWizard() {
         product = null
-        scanStatus = "Cadre l’étiquette — touche pour photo"
+        scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
         photoFile = null
         labelPhotoFile = null
         location = ""
@@ -1228,10 +1229,72 @@ private fun WeenoWizard(vm: AppViewModel) {
         }
     }
 
+    fun processScanJpeg(jpeg: ByteArray, previewFile: File? = null) {
+        if (previewFile != null) labelPhotoFile = previewFile
+        else {
+            try {
+                val dir = File(context.cacheDir, "wine").apply { mkdirs() }
+                val f = File(dir, "scan_${System.currentTimeMillis()}.jpg")
+                f.writeBytes(jpeg)
+                labelPhotoFile = f
+            } catch (_: Exception) { /* ignore */ }
+        }
+        scope.launch {
+            busy = true
+            scanStatus = "Analyse de l’étiquette…"
+            try {
+                val compressed = ImageUtils.compressJPEG(jpeg)
+                val scan = api.labelScan(compressed)
+                if (!scan.wineName.isNullOrBlank() || !scan.producer.isNullOrBlank()) {
+                    vivinoQuery = listOfNotNull(scan.producer, scan.wineName).filter { it.isNotBlank() }.joinToString(" ")
+                }
+                if (!scan.producer.isNullOrBlank()) vivinoProducer = scan.producer!!
+                if (scan.vintage != null) {
+                    vivinoVintage = scan.vintage.toString()
+                    manualVintage = scan.vintage.toString()
+                }
+                if (!scan.wineColor.isNullOrBlank()) manualStyle = scan.wineColor!!
+                if (!scan.region.isNullOrBlank()) manualRegion = scan.region!!
+                if (scan.candidates.isNotEmpty()) {
+                    vivinoResults = scan.candidates.take(5)
+                    scanStatus = if (scan.aiAvailable) "Étiquette lue — choisis le bon vin"
+                    else "Scan partiel — suggestions Vivino"
+                    vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
+                } else if (scan.aiAvailable) {
+                    scanStatus = scan.hint
+                        ?: "Étiquette lue — aucun candidat Vivino, cherche ou saisis"
+                } else {
+                    showManual = true
+                    val raw = (scan.aiError ?: scan.hint ?: "").lowercase()
+                    scanStatus = when {
+                        !scan.hint.isNullOrBlank() -> scan.hint!!
+                        !scan.aiError.isNullOrBlank() -> scan.aiError!!
+                        raw.contains("429") || raw.contains("quota") || raw.contains("rate") ->
+                            "Scan temporairement saturé — réessaie ou saisie manuelle"
+                        else -> "Scan indisponible — saisis ou cherche sur Vivino"
+                    }
+                }
+            } catch (e: Exception) {
+                val m = e.message ?: "Erreur scan"
+                scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
+                    "Erreur lecture réponse scan — mets à jour l’app"
+                } else {
+                    m
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     fun launchCamera(mode: String) {
         captureMode = mode
         if (!hasCameraPermission) {
             vm.showToast("Autorise la caméra puis réessaie", ToastPayload.Variant.WARN)
+            return
+        }
+        if (mode == "scan") {
+            showLabelScanner = true
             return
         }
         try {
@@ -1268,6 +1331,23 @@ private fun WeenoWizard(vm: AppViewModel) {
         } else {
             pendingCamAction = mode
             camPerm.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    if (showLabelScanner) {
+        Dialog(
+            onDismissRequest = { showLabelScanner = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                LabelAutoScanner(
+                    onCapture = { bytes ->
+                        showLabelScanner = false
+                        processScanJpeg(bytes)
+                    },
+                    onCancel = { showLabelScanner = false }
+                )
+            }
         }
     }
 
@@ -1365,7 +1445,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("🍾", fontSize = 36.sp)
                                 Spacer(Modifier.height(6.dp))
-                                Text("Cadre l’étiquette", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+                                Text("Caméra live — auto-scan", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                                 Text("touche pour prendre une photo", color = WineColors.muted, fontSize = 12.sp)
                             }
                         }
@@ -1622,7 +1702,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                     WeenoSecondaryButton("Changer de vin") {
                         product = null
                         labelPhotoFile = null
-                        scanStatus = "Cadre l’étiquette — touche pour photo"
+                        scanStatus = "Ouvre la caméra — détection auto de l’étiquette"
                     }
                     WeenoPrimaryButton("Continuer → photo") { vm.wizardStep = 2 }
                 }
