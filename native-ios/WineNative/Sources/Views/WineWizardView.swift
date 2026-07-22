@@ -365,12 +365,19 @@ struct WineWizardView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showFlavorBrowse.toggle() }
                 } label: {
-                    Text(showFlavorBrowse ? "Masquer les tags" : "Parcourir les tags prédéfinis…")
+                    Text(showFlavorBrowse ? "Masquer les tags prédéfinis" : "Parcourir les tags prédéfinis…")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(.plain)
                 if showFlavorBrowse, !flavorTags.isEmpty {
-                    FlavorTagGrid(title: "", tags: flavorTags, selected: $flavors, maxCount: 8)
+                    WeenoFlavorBrowsePanel(
+                        tags: flavorTags,
+                        selected: $flavors,
+                        suggested: Set(product?.suggestedFlavors ?? []),
+                        maxCount: 8
+                    )
                 }
             }
             .beerCard()
@@ -379,32 +386,12 @@ struct WineWizardView: View {
                 Text("Détails")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                HStack(alignment: .top, spacing: 8) {
-                    WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Couleur")
-                            .font(.system(size: Theme.Font.field))
-                            .foregroundStyle(Theme.muted)
-                        Picker("Couleur", selection: $noteColor) {
-                            Text("—").tag("")
-                            Text("Rouge").tag("rouge")
-                            Text("Blanc").tag("blanc")
-                            Text("Rosé").tag("rose")
-                            Text("Effervescent").tag("effervescent")
-                            Text("Orange").tag("orange")
-                            Text("Fortifié").tag("fortifie")
-                            Text("Autre").tag("autre")
-                        }
-                        .pickerStyle(.menu)
-                        .tint(Theme.accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.fieldBg)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                }
+                WeenoField(label: "Millésime", text: $noteVintage, placeholder: "2019", keyboard: .numberPad)
+                    .frame(maxWidth: 140)
+                Text("Couleur")
+                    .font(.system(size: Theme.Font.field))
+                    .foregroundStyle(Theme.muted)
+                WeenoColorChipPicker(value: $noteColor)
                 HStack(spacing: 8) {
                     WeenoField(label: "Région", text: $noteRegion, placeholder: "Saint-Aubin…")
                     WeenoField(label: "Pays", text: $noteCountry, placeholder: "France")

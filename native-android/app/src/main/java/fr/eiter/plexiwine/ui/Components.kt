@@ -352,30 +352,89 @@ fun WeenoGiftsFiltersRow(
     }
 }
 
-/** Étoiles + note (détail check-in / historique). */
+/** Étoiles + note (historique / détail) — 5 étoiles + chiffre. */
 @Composable
-fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier) {
+fun WeenoStarRating(rating: Double, modifier: Modifier = Modifier, showNumber: Boolean = true) {
     val r = rating.coerceIn(0.0, 5.0)
-    val full = kotlin.math.floor(r).toInt().coerceIn(0, 5)
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         for (i in 0 until 5) {
+            val fullAt = (i + 1).toDouble()
+            val filled = r + 0.01 >= fullAt - 0.5
             Text(
-                text = if (i < full) "★" else "☆",
-                color = if (i < full) WineColors.star else WineColors.starOff,
-                fontSize = 14.sp
+                text = if (r >= fullAt) "★" else if (filled) "★" else "☆",
+                color = if (filled) WineColors.star else WineColors.starOff,
+                fontSize = 13.sp
             )
         }
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = formatRating(r),
-            color = WineColors.accent,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp
-        )
+        if (showNumber) {
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = formatRating(r),
+                color = WineColors.accent,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun WeenoColorChipPicker(value: String, onChange: (String) -> Unit) {
+    val options = listOf(
+        "" to "—",
+        "rouge" to "Rouge",
+        "blanc" to "Blanc",
+        "rose" to "Rosé",
+        "effervescent" to "Efferv.",
+        "orange" to "Orange",
+        "fortifie" to "Fortifié",
+        "autre" to "Autre",
+    )
+    FlowRowWrap {
+        options.forEach { (id, label) ->
+            val on = value == id || (id.isEmpty() && value.isEmpty())
+            TagChip(label, on) { onChange(id) }
+        }
+    }
+}
+
+@Composable
+fun WeenoFlavorBrowsePanel(
+    tags: List<String>,
+    selected: Set<String>,
+    maxCount: Int = 8,
+    onToggle: (String) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(WineColors.bg.copy(alpha = 0.55f))
+            .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
+            .padding(10.dp)
+    ) {
+        FlowRowWrap {
+            tags.forEach { tag ->
+                val on = tag in selected
+                TagChip(tag, on) {
+                    if (on || selected.size < maxCount) onToggle(tag)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WeenoStatusChipBar(value: String, options: List<Pair<String, String>>, onChange: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { (id, label) ->
+            val on = value == id
+            TagChip(label, on) { onChange(id) }
+        }
     }
 }
 
@@ -554,7 +613,7 @@ fun TagChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(999.dp))
+            .border(0.5.dp, border, RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
     )

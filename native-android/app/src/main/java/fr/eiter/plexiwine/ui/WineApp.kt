@@ -1657,14 +1657,13 @@ private fun WeenoWizard(vm: AppViewModel) {
                     }
                     TextButton(onClick = { showFlavorBrowse = !showFlavorBrowse }) {
                         Text(
-                            if (showFlavorBrowse) "Masquer les tags" else "Parcourir les tags prédéfinis…",
+                            if (showFlavorBrowse) "Masquer les tags prédéfinis" else "Parcourir les tags prédéfinis…",
                             color = WineColors.accent,
                             fontSize = 12.sp
                         )
                     }
                     if (showFlavorBrowse && flavorTags.isNotEmpty()) {
-                        FlavorTagGrid(
-                            title = "",
+                        WeenoFlavorBrowsePanel(
                             tags = flavorTags,
                             selected = flavors,
                             maxCount = 8
@@ -1677,14 +1676,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                 WeenoCard {
                     Text("Détails", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.weight(1f)) {
-                            WeenoField("Millésime", noteVintage, { noteVintage = it }, "2019", KeyboardType.Number)
-                        }
-                        Box(Modifier.weight(1f)) {
-                            WeenoField("Couleur", noteColor, { noteColor = it }, "rouge / blanc…")
-                        }
-                    }
+                    WeenoField("Millésime", noteVintage, { noteVintage = it }, "2019", KeyboardType.Number)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Couleur", color = WineColors.muted, fontSize = 12.sp)
+                    Spacer(Modifier.height(4.dp))
+                    WeenoColorChipPicker(noteColor) { noteColor = it }
                     Spacer(Modifier.height(4.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f)) {
@@ -2057,7 +2053,7 @@ private fun HistoryCard(
                         Text("privé", color = WineColors.accent, fontSize = 10.sp)
                     }
                 }
-                Text("★ ${formatRating(item.rating)}", color = WineColors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                WeenoStarRating(item.rating, showNumber = true)
                 Text(
                     "${item.producer ?: "—"} · ${item.style ?: "Inconnu"} · ${formatDate(item.createdAt)}",
                     color = WineColors.muted,

@@ -1480,14 +1480,17 @@ final class WineAPI {
         return arr
     }
 
-    /// Statut scan étiquette / clés (admin) — sans afficher le fournisseur dans l'UI user.
-    func visionStatus() async throws -> VisionStatus {
-        let (data, http, _) = try await request(path: "/api/health", method: "GET", body: nil)
+    /// Statut scan étiquette / clés (admin). `probe=true` teste réellement les clés.
+    func visionStatus(probe: Bool = false) async throws -> VisionStatus {
+        let path = probe ? "/api/admin/vision-probe" : "/api/health"
+        let method = probe ? "POST" : "GET"
+        let (data, http, _) = try await request(path: path, method: method, body: probe ? Data() : nil)
         try throwIfUnauthorized(http.statusCode)
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let v = root["vision"] as? [String: Any] else {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return VisionStatus(available: false, keys: 0, detail: [])
         }
+        // probe renvoie vision à la racine ; health sous "vision"
+        let v = (root["vision"] as? [String: Any]) ?? root
         let detailArr = v["gemini_keys_detail"] as? [[String: Any]] ?? []
         let detail = detailArr.compactMap { d -> VisionKeyDetail? in
             guard let idx = d["index"] as? Int ?? (d["index"] as? NSNumber)?.intValue else { return nil }
@@ -1499,7 +1502,7 @@ final class WineAPI {
             )
         }
         return VisionStatus(
-            available: v["available"] as? Bool ?? false,
+            available: v["available"] as? Bool ?? !detail.isEmpty,
             keys: v["gemini_keys"] as? Int ?? detail.count,
             detail: detail
         )

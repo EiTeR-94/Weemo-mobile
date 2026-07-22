@@ -367,15 +367,16 @@ struct WeenoQuestAdminSheetView: View {
             }
             .buttonStyle(.plain)
 
-            // Filtre statut
-            Picker("Statut", selection: $feedbackStatusFilter) {
-                Text("Tous les statuts").tag("")
-                Text("En cours").tag("open")
-                Text("Mis en place").tag("done")
-                Text("Refusés").tag("rejected")
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
+            // Filtre statut — chips (pas menu système)
+            WeenoStatusChipBar(
+                value: $feedbackStatusFilter,
+                options: [
+                    ("", "Tous"),
+                    ("open", "En cours"),
+                    ("done", "Mis en place"),
+                    ("rejected", "Refusés"),
+                ]
+            )
             .onChange(of: feedbackStatusFilter) { _ in
                 Task { await loadFeedback() }
             }

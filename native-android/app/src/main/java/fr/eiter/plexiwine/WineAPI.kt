@@ -795,12 +795,16 @@ class WineAPI private constructor(context: Context) {
     data class VisionKeyDetail(val index: Int, val lastStatus: String, val rateLimited: Boolean, val lastError: String?)
     data class VisionStatus(val available: Boolean, val keys: Int, val detail: List<VisionKeyDetail>)
 
-    suspend fun visionStatus(): VisionStatus = withContext(Dispatchers.IO) {
+    suspend fun visionStatus(probe: Boolean = false): VisionStatus = withContext(Dispatchers.IO) {
         try {
-            val (body, code) = execute(requestBuilder("api/health").get().build())
+            val (body, code) = if (probe) {
+                execute(requestBuilder("api/admin/vision-probe").post(ByteArray(0).toRequestBody()).build())
+            } else {
+                execute(requestBuilder("api/health").get().build())
+            }
             if (code !in 200..299) return@withContext VisionStatus(false, 0, emptyList())
             val root = com.google.gson.JsonParser.parseString(body).asJsonObject
-            val v = root.getAsJsonObject("vision") ?: return@withContext VisionStatus(false, 0, emptyList())
+            val v = root.getAsJsonObject("vision") ?: root
             val detail = mutableListOf<VisionKeyDetail>()
             v.getAsJsonArray("gemini_keys_detail")?.forEach { el ->
                 val o = el.asJsonObject
@@ -814,7 +818,7 @@ class WineAPI private constructor(context: Context) {
                 )
             }
             VisionStatus(
-                available = v.get("available")?.asBoolean ?: false,
+                available = v.get("available")?.asBoolean ?: (detail.isNotEmpty()),
                 keys = v.get("gemini_keys")?.asInt ?: detail.size,
                 detail = detail
             )

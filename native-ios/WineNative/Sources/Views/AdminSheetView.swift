@@ -299,8 +299,10 @@ struct AdminSheetView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
             }
-            Button("Rafraîchir statut") {
-                Task { vision = try? await app.api.visionStatus() }
+            Button("Tester les clés maintenant") {
+                Task {
+                    vision = try? await app.api.visionStatus(probe: true)
+                }
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Theme.accent)
@@ -308,9 +310,9 @@ struct AdminSheetView: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card)
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .task { vision = try? await app.api.visionStatus() }
+        .task { vision = try? await app.api.visionStatus(probe: true) }
     }
 
     @ViewBuilder

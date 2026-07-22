@@ -423,7 +423,7 @@ fun AdminSheet(vm: AppViewModel) {
                     // Statut clés scan étiquette
                     var vision by remember { mutableStateOf<WineAPI.VisionStatus?>(null) }
                     LaunchedEffect(Unit) {
-                        vision = withContext(Dispatchers.IO) { try { vm.api.visionStatus() } catch (_: Exception) { null } }
+                        vision = withContext(Dispatchers.IO) { try { vm.api.visionStatus(probe = true) } catch (_: Exception) { null } }
                     }
                     Text("Scan étiquette (clés API)", color = WineColors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
@@ -431,6 +431,13 @@ fun AdminSheet(vm: AppViewModel) {
                     if (v == null) {
                         Text("Chargement…", color = WineColors.muted, fontSize = 12.sp)
                     } else {
+                        TextButton(onClick = {
+                            scope.launch {
+                                vision = withContext(Dispatchers.IO) {
+                                    try { vm.api.visionStatus(probe = true) } catch (_: Exception) { null }
+                                }
+                            }
+                        }) { Text("Tester les clés maintenant", color = WineColors.accent, fontSize = 12.sp) }
                         Text(
                             if (v.available) "${v.keys} clé(s) configurée(s)" else "Scan IA non configuré",
                             color = WineColors.muted,

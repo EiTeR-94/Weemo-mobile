@@ -265,24 +265,134 @@ struct WeenoPreviewCard: View {
     }
 }
 
-/// Barre d'étoiles fractionnelle (historique / cadeaux) — largeur fixe fiable.
+/// Étoiles SF Symbol (historique / cadeaux) — propre, fractionnel.
 struct WeenoStarBar: View {
     let rating: Double
     var size: CGFloat = 12
-    private let totalWidth: CGFloat = 55
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            Text("★★★★★")
-                .font(.system(size: size))
-                .foregroundStyle(Theme.starOff)
-            Text("★★★★★")
-                .font(.system(size: size))
-                .foregroundStyle(Theme.star)
-                .frame(width: WineFormatters.starFillWidth(rating, totalWidth: totalWidth), alignment: .leading)
-                .clipped()
+        let r = min(5, max(0, rating))
+        HStack(spacing: 2) {
+            ForEach(0..<5, id: \.self) { i in
+                let threshold = Double(i) + 1
+                Image(systemName: starSymbol(r: r, fullAt: threshold))
+                    .font(.system(size: size))
+                    .foregroundStyle(r + 0.01 >= Double(i) + 0.25 ? Theme.star : Theme.starOff)
+            }
         }
-        .frame(width: totalWidth, alignment: .leading)
+        .accessibilityLabel("Note \(WineFormatters.ratingLabel(r)) sur 5")
+    }
+
+    private func starSymbol(r: Double, fullAt: Double) -> String {
+        if r >= fullAt { return "star.fill" }
+        if r >= fullAt - 0.5 { return "star.leadinghalf.filled" }
+        return "star"
+    }
+}
+
+/// Sélecteur couleur en chips (pas de menu système moche).
+struct WeenoColorChipPicker: View {
+    @Binding var value: String
+    private let options: [(String, String)] = [
+        ("", "—"),
+        ("rouge", "Rouge"),
+        ("blanc", "Blanc"),
+        ("rose", "Rosé"),
+        ("effervescent", "Efferv."),
+        ("orange", "Orange"),
+        ("fortifie", "Fortifié"),
+        ("autre", "Autre"),
+    ]
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(options, id: \.0) { id, label in
+                let on = value == id || (id.isEmpty && value.isEmpty)
+                Button {
+                    value = id
+                } label: {
+                    Text(label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(on ? Theme.accent.opacity(0.22) : Theme.bg)
+                        .foregroundStyle(on ? Theme.accent : Theme.text)
+                        .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.7) : Theme.border, lineWidth: 0.5))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// Panel tags prédéfinis style webapp (.chips-browse).
+struct WeenoFlavorBrowsePanel: View {
+    let tags: [String]
+    @Binding var selected: Set<String>
+    var suggested: Set<String> = []
+    var maxCount: Int = 8
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(tags, id: \.self) { tag in
+                let on = selected.contains(tag)
+                let isSug = suggested.contains(tag)
+                Button {
+                    if on { selected.remove(tag) }
+                    else if selected.count < maxCount { selected.insert(tag) }
+                } label: {
+                    Text(tag)
+                        .font(.system(size: 12, weight: on ? .semibold : .regular))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(on ? (isSug ? Theme.star.opacity(0.18) : Theme.accent.opacity(0.2)) : Theme.bg)
+                        .foregroundStyle(on ? (isSug ? Theme.star : Theme.accent) : Theme.text)
+                        .overlay(
+                            Capsule().stroke(
+                                on ? (isSug ? Theme.star.opacity(0.7) : Theme.accent.opacity(0.65)) : Theme.border,
+                                lineWidth: 0.5
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.bg.opacity(0.55))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Filtre statut en chips (admin feedback).
+struct WeenoStatusChipBar: View {
+    @Binding var value: String
+    let options: [(String, String)]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(options, id: \.0) { id, label in
+                    let on = value == id
+                    Button {
+                        value = id
+                    } label: {
+                        Text(label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(on ? Theme.accent.opacity(0.22) : Theme.card)
+                            .foregroundStyle(on ? Theme.accent : Theme.text)
+                            .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.7) : Theme.border, lineWidth: 0.5))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }
 
