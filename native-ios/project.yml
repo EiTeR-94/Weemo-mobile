@@ -8,11 +8,11 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-    TARGETED_DEVICE_FAMILY: "1,2"  # Priority 5: basic iPad support (in addition to iPhone)
+    TARGETED_DEVICE_FAMILY: "1,2"
     INFOPLIST_FILE: WineNative/Resources/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: fr.eiter.plexiwine
-    MARKETING_VERSION: "0.2.1"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "10"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""
     CODE_SIGNING_ALLOWED: NO
@@ -30,9 +30,10 @@ targets:
     type: application
     platform: iOS
     sources:
-      - path: WineNative/Sources
+      # Coque WebView uniquement (= webapp) — pas d'UI native Beer
+      - path: WineNative/Sources/WineNativeApp.swift
+      - path: WineNative/Sources/WeenoWebShellView.swift
       - path: WineNative/Resources/Assets.xcassets
-    # Theme 1: Tests/ dir added with example (ExampleModelTests.swift). To enable: add separate test target in XcodeGen config + scheme. CI note in workflow.
     entitlements:
       path: WineNative/Resources/WineNative.entitlements
     settings:
@@ -40,20 +41,6 @@ targets:
         PRODUCT_NAME: Weeno
         GENERATE_INFOPLIST_FILE: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
-
-  # Priority 2: Test target wired (XcodeGen). Includes ExampleModelTests + can add mocks.
-  # To build: xcodegen ; xcodebuild test -project WineNative.xcodeproj -scheme WineNativeTests -destination 'platform=iOS Simulator,name=iPhone 16'
-  WineNativeTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: WineNative/Tests
-    dependencies:
-      - target: WineNative
-    settings:
-      base:
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Weeno.app/Weeno"
-        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   WineNative:
@@ -64,11 +51,3 @@ schemes:
       config: Debug
     archive:
       config: Release
-  # Test scheme for CI
-  WineNativeTests:
-    build:
-      targets:
-        WineNativeTests: all
-    test:
-      targets:
-        - WineNativeTests
