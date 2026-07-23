@@ -42,6 +42,7 @@ struct WineWizardView: View {
     @State private var location = ""
 
     @State private var rating = 3.0
+    @State private var rebuy: String?
     @State private var comment = ""
     @State private var flavors = Set<String>()
     @State private var hops = Set<String>()
@@ -427,26 +428,26 @@ struct WineWizardView: View {
             .beerCard()
 
             VStack(alignment: .leading, spacing: 8) {
+                Text("Je rachèterais ?")
+                    .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                RebuyChoiceRow(value: $rebuy)
+            }
+            .beerCard()
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Arômes & structure")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.")
+                Text("Ressenti 100% libre — tape ce que tu perçois, les suggestions s’affinent en direct.")
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
-                if !flavorTags.isEmpty {
-                    WeenoTagDropdownField(
-                        label: "",
-                        tags: flavorTags,
-                        selected: $flavors,
-                        maxCount: 8,
-                        suggested: Set(product?.suggestedFlavors ?? [])
-                    )
-                }
-                CustomTagInput(
+                FlavorSuggestInput(
                     placeholder: "ex. pierre chaude, salin…",
                     input: $customFlavorInput,
                     selected: $flavors,
-                    maxCount: 8
+                    maxCount: 12,
+                    allTags: flavorTags
                 )
             }
             .beerCard()
@@ -684,9 +685,6 @@ struct WineWizardView: View {
                 if p.wineName.isEmpty { p.wineName = hit.wineName }
                 if p.producer.isEmpty { p.producer = hit.producer ?? "—" }
                 product = p
-                if let sug = res.suggestedFlavors, !sug.isEmpty {
-                    flavors = Set(sug)
-                }
                 scanStatus = "Vin prêt — continue vers la photo"
                 app.showToast("Vin sélectionné ✓", variant: .success)
             } else {
@@ -709,16 +707,13 @@ struct WineWizardView: View {
         hopTags = []
         hops = []
         showFlavors = true
-        // Tags prédéfinis depuis /api/config (+ déjà sélectionnés via enrichissement Vivino)
+        // Catalogue /api/config — source des suggestions autocomplete uniquement (plus d'auto-présélection).
         if app.networkStatus == .online {
             do {
                 flavorTags = try await app.api.configFlavors()
             } catch {
                 flavorTags = []
             }
-        }
-        if flavors.isEmpty, let sug = product?.suggestedFlavors, !sug.isEmpty {
-            flavors = Set(sug)
         }
         if let p = product {
             if noteVintage.isEmpty, let v = p.vintage { noteVintage = String(v) }
@@ -754,7 +749,8 @@ struct WineWizardView: View {
                 comment: comment,
                 photoJPEG: photoData,
                 force: force,
-                location: location
+                location: location,
+                rebuy: rebuy
             )
             if msg.hasPrefix("duplicate|") {
                 let parts = msg.split(separator: "|").map(String.init)
@@ -822,6 +818,7 @@ struct WineWizardView: View {
         photoPreview = nil
         location = ""
         rating = 3.0
+        rebuy = nil
         comment = ""
         flavors = []
         hops = []

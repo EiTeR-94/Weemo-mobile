@@ -117,7 +117,11 @@ data class CheckinItem(
     @SerializedName("hidden_from_partner") val hiddenFromPartner: Boolean? = null,
     @SerializedName("vivino_id") val vivinoId: Int? = null,
     /** Lieu / lien de dégustation (optionnel). */
-    val location: String? = null
+    val location: String? = null,
+    /** "yes" | "no" | "maybe" | null */
+    val rebuy: String? = null,
+    /** Autres utilisateurs ayant aussi dégusté ce vin (calculé serveur). */
+    @SerializedName("also_tasted_by") val alsoTastedBy: List<String>? = null
 ) {
     /** Weeno stocke photo_path (pas photo_url Beer). */
     val resolvedPhoto: String? get() = photoURL ?: photoPath
@@ -273,7 +277,9 @@ data class PendingCheckin(
     /** Absolute path to local JPEG, or null */
     val photoPath: String? = null,
     /** Lieu / lien de dégustation (optionnel). */
-    val location: String? = null
+    val location: String? = null,
+    /** "yes" | "no" | "maybe" | null */
+    val rebuy: String? = null
 )
 
 enum class NetworkStatus(val label: String) {

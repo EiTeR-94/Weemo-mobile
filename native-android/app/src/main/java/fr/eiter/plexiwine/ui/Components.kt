@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -949,6 +950,136 @@ fun CustomTagInput(
             onClick = onAdd,
             colors = ButtonDefaults.buttonColors(containerColor = WineColors.accent, contentColor = WineColors.btnPrimaryText)
         ) { Text("+") }
+    }
+}
+
+/**
+ * Priorité : tag entier == recherche > commence par > un mot du tag commence
+ * par > contient (n'importe où). Portage Kotlin exact de `_flavorMatchScore` (app.js).
+ */
+private fun flavorMatchScore(tagLower: String, q: String): Int {
+    if (tagLower == q) return 0
+    if (tagLower.startsWith(q)) return 1
+    if (tagLower.split(Regex("[\\s'-]+")).any { it.startsWith(q) }) return 2
+    if (tagLower.contains(q)) return 3
+    return -1
+}
+
+/**
+ * Champ libre arômes/structure + suggestions triées par pertinence (parité webapp
+ * `renderCustomSuggestDropdown` / `_flavorMatchScore` — plus de catalogue parcourable).
+ */
+@Composable
+fun FlavorSuggestInput(
+    placeholder: String,
+    input: String,
+    onInput: (String) -> Unit,
+    catalog: List<String>,
+    selected: Set<String>,
+    onAdd: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = onInput,
+                placeholder = { Text(placeholder, color = WineColors.muted.copy(alpha = 0.6f)) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = WineColors.text,
+                    unfocusedTextColor = WineColors.text,
+                    focusedBorderColor = WineColors.accent,
+                    unfocusedBorderColor = WineColors.border,
+                    cursorColor = WineColors.accent,
+                    focusedContainerColor = WineColors.fieldBg,
+                    unfocusedContainerColor = WineColors.fieldBg
+                ),
+                shape = RoundedCornerShape(10.dp)
+            )
+            Button(
+                onClick = {
+                    val t = input.trim()
+                    if (t.isNotBlank()) onAdd(t)
+                    onInput("")
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = WineColors.accent, contentColor = WineColors.btnPrimaryText)
+            ) { Text("+") }
+        }
+
+        val q = input.trim().lowercase()
+        if (q.isNotEmpty()) {
+            val hits = remember(catalog, selected, q) {
+                catalog
+                    .asSequence()
+                    .filter { tag -> selected.none { it.equals(tag, ignoreCase = true) } }
+                    .map { it to flavorMatchScore(it.lowercase(), q) }
+                    .filter { it.second >= 0 }
+                    .sortedWith(compareBy({ it.second }, { it.first }))
+                    .map { it.first }
+                    .take(8)
+                    .toList()
+            }
+            if (hits.isNotEmpty()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(0.5.dp, WineColors.border, RoundedCornerShape(10.dp))
+                        .background(WineColors.fieldBg)
+                ) {
+                    hits.forEachIndexed { i, tag ->
+                        Text(
+                            tag,
+                            color = WineColors.text,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onAdd(tag)
+                                    onInput("")
+                                }
+                                .padding(horizontal = 12.dp, vertical = 9.dp)
+                        )
+                        if (i < hits.lastIndex) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(0.5.dp)
+                                    .background(WineColors.border)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Choix tri-état "Je rachèterais ?" — parité webapp `.rebuy-choices` (toggle : re-taper enlève le choix). */
+@Composable
+fun RebuyChoiceRow(rebuy: String?, onChange: (String?) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Je rachèterais ?", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("yes" to "👍 Oui", "maybe" to "🤔 Peut-être", "no" to "👎 Non").forEach { (value, label) ->
+                val on = rebuy == value
+                Text(
+                    label,
+                    color = if (on) WineColors.btnPrimaryText else WineColors.text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (on) WineColors.accent else WineColors.fieldBg)
+                        .border(0.5.dp, if (on) WineColors.accent else WineColors.border, RoundedCornerShape(10.dp))
+                        .clickable { onChange(if (rebuy == value) null else value) }
+                        .padding(vertical = 10.dp)
+                )
+            }
+        }
     }
 }
 

@@ -1029,7 +1029,8 @@ final class WineAPI {
         hops: [String]?,
         comment: String?,
         hiddenFromPartner: Bool?,
-        location: String? = nil
+        location: String? = nil,
+        rebuy: String? = nil
     ) async throws {
         var payload: [String: Any] = [:]
         if let rating { payload["rating"] = rating }
@@ -1038,6 +1039,7 @@ final class WineAPI {
         if let comment { payload["comment"] = comment }
         if let location { payload["location"] = location }
         if let hiddenFromPartner { payload["hidden_from_partner"] = hiddenFromPartner }
+        if let rebuy { payload["rebuy"] = rebuy }
         let body = try JSONSerialization.data(withJSONObject: payload)
         let (data, http, _) = try await request(
             path: "/api/checkins/\(id)",
@@ -1386,7 +1388,7 @@ final class WineAPI {
         return decoded
     }
 
-    /// POST /api/label-scan — Gemini (+ failover 2 clés) côté serveur, candidats Vivino.
+    /// POST /api/label-scan — backend serveur configurable (Vivino-vision ou Gemini failover) + candidats Vivino.
     func labelScan(jpeg: Data) async throws -> LabelScanResult {
         let boundary = "WeenoScan-\(UUID().uuidString)"
         var req = URLRequest(url: try url("/api/label-scan"))
@@ -1648,7 +1650,8 @@ final class WineAPI {
         location: String = "",
         vintage: Int? = nil,
         region: String = "",
-        country: String = ""
+        country: String = "",
+        rebuy: String? = nil
     ) async throws -> CreateCheckinResult {
         // Weeno: JSON POST /api/checkins + photo optionnelle via /api/photo
         var photoPath: String? = nil
@@ -1689,6 +1692,7 @@ final class WineAPI {
         if !reg.isEmpty { payload["region"] = reg }
         let ctry = country.trimmingCharacters(in: .whitespacesAndNewlines)
         if !ctry.isEmpty { payload["country"] = ctry }
+        if let rebuy { payload["rebuy"] = rebuy }
         let json = try JSONSerialization.data(withJSONObject: payload)
         let (data, http, _) = try await request(
             path: "/api/checkins",

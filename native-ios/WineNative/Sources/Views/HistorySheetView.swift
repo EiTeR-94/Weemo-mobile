@@ -164,12 +164,23 @@ struct HistorySheetView: View {
                             Text(WineFormatters.ratingLabel(item.rating))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(Theme.accent)
+                            if let icon = RebuyLabel.icon(item.rebuy) {
+                                Text(icon)
+                                    .font(.system(size: 12))
+                                    .accessibilityLabel(RebuyLabel.tooltip(item.rebuy) ?? "")
+                            }
                         }
                         Text("\(item.producer ?? "—") · \(item.style ?? "Inconnu") · \(WineFormatters.formatDate(item.createdAt))")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.muted)
                         if let loc = item.location?.trimmingCharacters(in: .whitespacesAndNewlines), !loc.isEmpty {
                             Text("📍 \(loc)")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(2)
+                        }
+                        if let cotasters = item.alsoTastedBy, !cotasters.isEmpty {
+                            Text("👥 aussi dégusté par \(cotasters.joined(separator: ", "))")
                                 .font(.system(size: 12))
                                 .foregroundStyle(Theme.muted)
                                 .lineLimit(2)

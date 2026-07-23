@@ -182,9 +182,13 @@ struct CheckinItem: Identifiable, Codable, Hashable {
     let vivinoBid: Int?
     /// Lieu / lien où le vin a été dégusté (optionnel).
     let location: String?
+    /// "yes" | "maybe" | "no" | nil — parité webapp `rebuy`.
+    let rebuy: String?
+    /// Autres utilisateurs ayant dégusté le même vin (calculé serveur, lecture seule).
+    let alsoTastedBy: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, producer, rating, comment, barcode, flavors, hops, location
+        case id, producer, rating, comment, barcode, flavors, hops, location, rebuy
         case wineName = "wine_name"
         case style = "wine_color"
         case createdAt = "created_at"
@@ -192,6 +196,7 @@ struct CheckinItem: Identifiable, Codable, Hashable {
         case photoPath = "photo_path"
         case hiddenFromPartner = "hidden_from_partner"
         case vivinoBid = "vivino_id"
+        case alsoTastedBy = "also_tasted_by"
     }
 
     /// Weeno stocke `photo_path` (pas `photo_url` Beer).
@@ -461,6 +466,8 @@ struct PendingCheckin: Identifiable, Codable {
     var photoJPEGBase64: String?
     /// Lieu / lien de dégustation (optionnel). Optional for legacy offline queue JSON.
     var location: String? = nil
+    /// "yes" | "maybe" | "no" | nil. Optional for legacy offline queue JSON.
+    var rebuy: String? = nil
 }
 
 struct PreviousCheckin: Decodable {
@@ -607,7 +614,7 @@ struct VivinoHit: Decodable, Identifiable, Hashable {
     }
 }
 
-/// Résultat POST /api/label-scan (parité webapp Gemini + candidats Vivino).
+/// Résultat POST /api/label-scan (backend serveur configurable Vivino-vision ou Gemini + candidats Vivino).
 struct LabelScanResult {
     let ok: Bool
     let aiAvailable: Bool

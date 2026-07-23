@@ -9,6 +9,7 @@ struct CheckinEditView: View {
     let onSaved: () -> Void
 
     @State private var rating: Double
+    @State private var rebuy: String?
     @State private var comment: String
     @State private var location: String
     @State private var flavors = Set<String>()
@@ -25,6 +26,7 @@ struct CheckinEditView: View {
         self.item = item
         self.onSaved = onSaved
         _rating = State(initialValue: item.rating)
+        _rebuy = State(initialValue: item.rebuy)
         _comment = State(initialValue: item.comment ?? "")
         _location = State(initialValue: item.location ?? "")
         _flavors = State(initialValue: Set(item.flavors ?? []))
@@ -64,22 +66,22 @@ struct CheckinEditView: View {
                 VivinoRatingSlider(rating: $rating)
 
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Je rachèterais ?")
+                        .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                    RebuyChoiceRow(value: $rebuy)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Arômes & structure")
                         .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                         .foregroundStyle(Theme.text)
-                    if !flavorTags.isEmpty {
-                        WeenoTagDropdownField(
-                            label: "",
-                            tags: flavorTags,
-                            selected: $flavors,
-                            maxCount: 8
-                        )
-                    }
-                    CustomTagInput(
+                    FlavorSuggestInput(
                         placeholder: "ex. pierre chaude, salin…",
                         input: $customFlavorInput,
                         selected: $flavors,
-                        maxCount: 8
+                        maxCount: 12,
+                        allTags: flavorTags
                     )
                 }
 
@@ -140,7 +142,8 @@ struct CheckinEditView: View {
                 hops: [],
                 comment: String(comment.prefix(120)),
                 hiddenFromPartner: app.isAdmin ? hidden : nil,
-                location: String(location.prefix(300))
+                location: String(location.prefix(300)),
+                rebuy: rebuy
             )
             if removePhoto { try await app.api.removeCheckinPhoto(id: item.id) }
             else if let newPhoto { try await app.api.replaceCheckinPhoto(id: item.id, jpeg: newPhoto) }

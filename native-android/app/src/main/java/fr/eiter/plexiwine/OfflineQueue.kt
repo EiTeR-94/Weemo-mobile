@@ -134,7 +134,8 @@ class OfflineQueue(context: Context) {
                     vivinoId = item.vivinoId,
                     force = item.force,
                     photoJPEG = photoCompressed,
-                    location = item.location.orEmpty()
+                    location = item.location.orEmpty(),
+                    rebuy = item.rebuy
                 )
                 if (result.ok == true || result.id != null || result.duplicate == true) {
                     remove(item.id)

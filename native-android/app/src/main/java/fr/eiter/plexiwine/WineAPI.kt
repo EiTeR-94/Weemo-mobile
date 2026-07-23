@@ -666,7 +666,8 @@ class WineAPI private constructor(context: Context) {
         hops: List<String>? = null,
         comment: String? = null,
         hiddenFromPartner: Boolean? = null,
-        location: String? = null
+        location: String? = null,
+        rebuy: String? = null
     ) {
         val payload = mutableMapOf<String, Any?>()
         if (rating != null) payload["rating"] = rating
@@ -675,6 +676,7 @@ class WineAPI private constructor(context: Context) {
         if (comment != null) payload["comment"] = comment
         if (location != null) payload["location"] = location.take(300)
         if (hiddenFromPartner != null) payload["hidden_from_partner"] = hiddenFromPartner
+        if (rebuy != null) payload["rebuy"] = rebuy
         val json = gson.toJson(payload)
         val req = requestBuilder("api/checkins/$id")
             .patch(json.toRequestBody(JSON))
@@ -896,7 +898,7 @@ class WineAPI private constructor(context: Context) {
         // Weeno n'a pas de houblons — no-op (évite crash UI beer restante)
     }
 
-    /** POST /api/label-scan — Gemini (2 clés failover) + candidats Vivino côté serveur. */
+    /** POST /api/label-scan — backend serveur configurable (Vivino-vision ou Gemini failover) + candidats Vivino. */
     suspend fun labelScan(jpeg: ByteArray): LabelScanResult {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart(
@@ -1011,7 +1013,8 @@ class WineAPI private constructor(context: Context) {
         location: String = "",
         vintage: Int? = null,
         region: String = "",
-        country: String = ""
+        country: String = "",
+        rebuy: String? = null
     ): CreateCheckinResult = withContext(Dispatchers.IO) {
         var photoPath: String? = null
         if (photoJPEG != null && photoJPEG.isNotEmpty()) {
@@ -1049,6 +1052,7 @@ class WineAPI private constructor(context: Context) {
         if (vintage != null && vintage > 0) payload["vintage"] = vintage
         if (region.isNotBlank()) payload["region"] = region.trim()
         if (country.isNotBlank()) payload["country"] = country.trim()
+        if (rebuy != null) payload["rebuy"] = rebuy
         val json = gson.toJson(payload)
         val req = requestBuilder("api/checkins").post(json.toRequestBody(JSON)).build()
         val (body, code) = execute(req)
@@ -1090,7 +1094,8 @@ class WineAPI private constructor(context: Context) {
         flavors: List<String> = emptyList(),
         hops: List<String> = emptyList(),
         force: Boolean = false,
-        location: String = ""
+        location: String = "",
+        rebuy: String? = null
     ): Int {
         val bytes = photoFile?.takeIf { it.exists() }?.readBytes()
         val result = createCheckin(
@@ -1107,7 +1112,8 @@ class WineAPI private constructor(context: Context) {
             vivinoId = vivinoId?.toString().orEmpty(),
             force = force,
             photoJPEG = bytes,
-            location = location
+            location = location,
+            rebuy = rebuy
         )
         if (result.duplicate == true) {
             throw ApiException(

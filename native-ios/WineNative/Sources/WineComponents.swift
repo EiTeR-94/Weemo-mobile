@@ -538,6 +538,72 @@ struct VivinoRatingSlider: View {
     }
 }
 
+// MARK: - Rebuy (« Je rachèterais ? »)
+
+/// Tri-état "Je rachèterais ?" (parité webapp `#rebuy-choices` : yes/maybe/no).
+/// Re-taper la valeur déjà sélectionnée la désélectionne (toggle → nil).
+struct RebuyChoiceRow: View {
+    @Binding var value: String?
+    private let options: [(String, String)] = [
+        ("yes", "👍 Oui"),
+        ("maybe", "🤔 Peut-être"),
+        ("no", "👎 Non"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(options, id: \.0) { id, label in
+                let on = value == id
+                Button {
+                    value = on ? nil : id
+                } label: {
+                    Text(label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(on ? Theme.accent.opacity(0.22) : Theme.bg)
+                        .foregroundStyle(on ? Theme.accent : Theme.text)
+                        .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.7) : Theme.border, lineWidth: 0.5))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// Libellé complet (parité webapp `REBUY_LABEL`, détail dégustation).
+enum RebuyLabel {
+    static func full(_ value: String?) -> String? {
+        switch value {
+        case "yes": return "👍 Je rachèterais"
+        case "maybe": return "🤔 Peut-être"
+        case "no": return "👎 Je ne rachèterais pas"
+        default: return nil
+        }
+    }
+
+    /// Emoji seul (badge historique, parité webapp `rebuyIcon`).
+    static func icon(_ value: String?) -> String? {
+        switch value {
+        case "yes": return "👍"
+        case "maybe": return "🤔"
+        case "no": return "👎"
+        default: return nil
+        }
+    }
+
+    /// Tooltip / accessibilité (parité webapp `rebuyTitle`).
+    static func tooltip(_ value: String?) -> String? {
+        switch value {
+        case "yes": return "Je rachèterais"
+        case "maybe": return "Peut-être"
+        case "no": return "Je ne rachèterais pas"
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Custom tags
 
 struct CustomTagInput: View {
@@ -569,6 +635,110 @@ struct CustomTagInput: View {
         let tag = input.trimmingCharacters(in: .whitespaces)
         guard tag.count >= 2, selected.count < maxCount, !selected.contains(tag) else { return }
         onRegister?(tag)
+        selected.insert(tag)
+        input = ""
+    }
+}
+
+/// Saisie libre arômes/structure + suggestions triées par pertinence (parité webapp
+/// `renderCustomSuggestDropdown` / `_flavorMatchScore` — plus de catalogue à parcourir,
+/// juste un champ texte + autocomplete). `allTags` = catalogue `/api/config` (source des
+/// suggestions uniquement, jamais affiché en liste brute).
+struct FlavorSuggestInput: View {
+    let placeholder: String
+    @Binding var input: String
+    @Binding var selected: Set<String>
+    let maxCount: Int
+    var allTags: [String] = []
+    var onRegister: ((String) -> Void)?
+
+    /// Priorité : tag entier == recherche > commence par > un mot du tag commence
+    /// par > contient (n'importe où). Aligné sur `_flavorMatchScore` (app.js).
+    private static func matchScore(_ tagLower: String, _ q: String) -> Int {
+        if tagLower == q { return 0 }
+        if tagLower.hasPrefix(q) { return 1 }
+        let words = tagLower.split(whereSeparator: { $0 == "'" || $0 == "-" || $0.isWhitespace })
+        if words.contains(where: { $0.hasPrefix(q) }) { return 2 }
+        if tagLower.contains(q) { return 3 }
+        return -1
+    }
+
+    private var suggestions: [String] {
+        let q = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return [] }
+        let scored: [(tag: String, score: Int)] = allTags
+            .filter { !selected.contains($0) }
+            .compactMap { tag in
+                let score = Self.matchScore(tag.lowercased(), q)
+                return score >= 0 ? (tag, score) : nil
+            }
+        return scored
+            .sorted { a, b in
+                if a.score != b.score { return a.score < b.score }
+                return a.tag.localizedStandardCompare(b.tag) == .orderedAscending
+            }
+            .prefix(8)
+            .map { $0.tag }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField(placeholder, text: $input)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(10)
+                    .background(Theme.fieldBg)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(Theme.text)
+                    .onSubmit { add() }
+                Button("+", action: add)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(input.trimmingCharacters(in: .whitespaces).count < 2)
+            }
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(suggestions.enumerated()), id: \.offset) { idx, tag in
+                        Button {
+                            addSuggestion(tag)
+                        } label: {
+                            Text(tag)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.text)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        if idx < suggestions.count - 1 {
+                            Rectangle().fill(Theme.border).frame(height: 0.5)
+                        }
+                    }
+                }
+                .background(Theme.fieldBg)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    private func add() {
+        var tag = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Parité webapp : espaces internes multiples repliés en un seul.
+        tag = tag.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        guard tag.count >= 2 else { return }
+        if tag.count > 40 { tag = String(tag.prefix(40)) }
+        guard selected.count < maxCount else { return }
+        guard !selected.contains(where: { $0.caseInsensitiveCompare(tag) == .orderedSame }) else { return }
+        onRegister?(tag)
+        selected.insert(tag)
+        input = ""
+    }
+
+    private func addSuggestion(_ tag: String) {
+        guard selected.count < maxCount else { return }
         selected.insert(tag)
         input = ""
     }

@@ -737,7 +737,8 @@ final class AppModel: ObservableObject {
         comment: String,
         photoJPEG: Data?,
         force: Bool,
-        location: String = ""
+        location: String = "",
+        rebuy: String? = nil
     ) async throws -> String {
         let loc = String(location.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))
         let pending = PendingCheckin(
@@ -756,7 +757,8 @@ final class AppModel: ObservableObject {
             vivinoBid: product.vivinoBid.map(String.init) ?? "",
             force: force,
             photoJPEGBase64: photoJPEG?.base64EncodedString(),
-            location: loc.isEmpty ? nil : loc
+            location: loc.isEmpty ? nil : loc,
+            rebuy: rebuy
         )
 
         let shouldQueueLocally = networkStatus != .online || !isOnline
@@ -783,7 +785,8 @@ final class AppModel: ObservableObject {
                 location: pending.location ?? "",
                 vintage: product.vintage,
                 region: product.region ?? "",
-                country: product.country ?? ""
+                country: product.country ?? "",
+                rebuy: pending.rebuy
             )
             if result.duplicate == true {
                 let pc = result.previousCheckin

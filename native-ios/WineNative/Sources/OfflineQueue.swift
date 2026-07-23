@@ -107,7 +107,8 @@ final class OfflineQueue: ObservableObject {
                     vivinoBid: item.vivinoBid,
                     force: item.force,
                     photoJPEG: photo,
-                    location: item.location ?? ""
+                    location: item.location ?? "",
+                    rebuy: item.rebuy
                 )
                 if result.ok == true || result.id != nil || result.duplicate == true {
                     remove(id: item.id)

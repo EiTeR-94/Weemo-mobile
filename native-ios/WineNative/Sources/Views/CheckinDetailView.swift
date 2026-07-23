@@ -80,6 +80,20 @@ struct CheckinDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    if let rebuyText = RebuyLabel.full(item.rebuy) {
+                        Text(rebuyText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if let cotasters = item.alsoTastedBy, !cotasters.isEmpty {
+                        Text("👥 Aussi dégusté par \(cotasters.joined(separator: ", "))")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if let flavors = item.flavors, !flavors.isEmpty {
                         Text("Goûts : \(flavors.joined(separator: ", "))")
                             .font(.system(size: 13))

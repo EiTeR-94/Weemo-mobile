@@ -1075,6 +1075,7 @@ private fun WeenoWizard(vm: AppViewModel) {
     /** Lieu / lien de dégustation (optionnel) — saisi à l'étape Photo, comme iOS. */
     var location by remember { mutableStateOf("") }
     var rating by remember { mutableFloatStateOf(3f) }
+    var rebuy by remember { mutableStateOf<String?>(null) }
     var comment by remember { mutableStateOf("") }
     var flavors by remember { mutableStateOf(setOf<String>()) }
     var hops by remember { mutableStateOf(setOf<String>()) }
@@ -1148,6 +1149,7 @@ private fun WeenoWizard(vm: AppViewModel) {
         labelPhotoFile = null
         location = ""
         rating = 3f
+        rebuy = null
         comment = ""
         flavors = emptySet()
         hops = emptySet()
@@ -1175,7 +1177,7 @@ private fun WeenoWizard(vm: AppViewModel) {
             vm.showToast("Photo prête ✓", ToastPayload.Variant.SUCCESS)
             return@rememberLauncherForActivityResult
         }
-        // Mode scan = POST /api/label-scan (Gemini 2 clés + candidats Vivino)
+        // Mode scan = POST /api/label-scan (backend serveur Vivino-vision ou Gemini + candidats Vivino)
         labelPhotoFile = f
         scope.launch {
             busy = true
@@ -1287,7 +1289,8 @@ private fun WeenoWizard(vm: AppViewModel) {
                 comment = comment,
                 photoFile = photoFile,
                 force = force,
-                location = location
+                location = location,
+                rebuy = rebuy
             )
             if (msg.startsWith("duplicate|")) {
                 val parts = msg.split("|")
@@ -1695,6 +1698,10 @@ private fun WeenoWizard(vm: AppViewModel) {
                     VivinoRatingSlider(rating, { rating = it }, onTick = { vm.hapticTick() })
                 }
 
+                WeenoCard {
+                    RebuyChoiceRow(rebuy) { rebuy = it }
+                }
+
                 var noteVintage by remember { mutableStateOf(product?.vintage?.toString().orEmpty()) }
                 var noteColor by remember { mutableStateOf(product?.styleFr ?: product?.style?.takeIf { it != "Unknown" }.orEmpty()) }
                 var noteRegion by remember { mutableStateOf(product?.region.orEmpty()) }
@@ -1703,25 +1710,43 @@ private fun WeenoWizard(vm: AppViewModel) {
 
                 WeenoCard {
                     Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
-                    Text("Chips + recherche — pas de liste interminable. Ajoute les tiens en bas.", color = WineColors.muted, fontSize = 11.sp)
+                    Text("Texte libre — tape et choisis dans les suggestions.", color = WineColors.muted, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp))
-                    if (flavorTags.isNotEmpty()) {
-                        WeenoTagDropdownField(
-                            label = "",
-                            tags = flavorTags,
-                            selected = flavors,
-                            maxCount = 8,
-                            suggested = product?.suggestedFlavors?.toSet().orEmpty()
-                        ) { tag ->
-                            flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
+                    if (flavors.isNotEmpty()) {
+                        FlowRowWrap {
+                            flavors.sorted().forEach { tag ->
+                                Text(
+                                    "$tag ×",
+                                    color = WineColors.accent,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(WineColors.accent.copy(alpha = 0.2f))
+                                        .border(0.5.dp, WineColors.accent.copy(alpha = 0.65f), RoundedCornerShape(999.dp))
+                                        .clickable { flavors = flavors - tag }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                         Spacer(Modifier.height(8.dp))
                     }
-                    CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
-                        val t = customFlavor.trim()
-                        if (t.isNotBlank() && flavors.size < 8) {
-                            flavors = flavors + t
-                            customFlavor = ""
+                    FlavorSuggestInput(
+                        placeholder = "ex. pierre chaude, salin…",
+                        input = customFlavor,
+                        onInput = { customFlavor = it },
+                        catalog = flavorTags,
+                        selected = flavors
+                    ) { raw ->
+                        var tag = raw.trim().replace(Regex("\\s+"), " ")
+                        if (tag.length > 40) tag = tag.take(40)
+                        val preset = flavorTags.firstOrNull { it.equals(tag, ignoreCase = true) }
+                        if (preset != null) tag = preset
+                        when {
+                            tag.isBlank() -> {}
+                            flavors.any { it.equals(tag, ignoreCase = true) } -> vm.showToast("Déjà ajouté", ToastPayload.Variant.WARN)
+                            flavors.size >= 12 -> vm.showToast("Max 12 tags", ToastPayload.Variant.WARN)
+                            else -> flavors = flavors + tag
                         }
                     }
                 }
@@ -2081,6 +2106,22 @@ private fun StatCell(value: String, label: String, modifier: Modifier = Modifier
     }
 }
 
+/** Parité webapp history.js — icône badge "je rachèterais". */
+private fun rebuyEmoji(rebuy: String?): String? = when (rebuy) {
+    "yes" -> "👍"
+    "maybe" -> "🤔"
+    "no" -> "👎"
+    else -> null
+}
+
+/** Parité webapp checkin-detail.js — libellé détaillé "je rachèterais". */
+private fun rebuyLabel(rebuy: String?): String? = when (rebuy) {
+    "yes" -> "👍 Je rachèterais"
+    "maybe" -> "🤔 Peut-être"
+    "no" -> "👎 Je ne rachèterais pas"
+    else -> null
+}
+
 @Composable
 private fun HistoryCard(
     vm: AppViewModel,
@@ -2118,8 +2159,11 @@ private fun HistoryCard(
                 modifier = Modifier.size(88.dp).clip(RoundedCornerShape(10.dp))
             )
             Column(Modifier.weight(1f)) {
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.wineName, color = WineColors.text, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    rebuyEmoji(item.rebuy)?.let { emoji ->
+                        Text(emoji, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
+                    }
                     if (vm.isAdmin && item.hiddenFromPartner == true) {
                         Text("privé", color = WineColors.accent, fontSize = 10.sp)
                     }
@@ -2138,6 +2182,9 @@ private fun HistoryCard(
                 }
                 item.hops?.takeIf { it.isNotEmpty() }?.let {
                     Text("Houblons : ${it.joinToString(", ")}", color = WineColors.muted, fontSize = 12.sp)
+                }
+                item.alsoTastedBy?.takeIf { it.isNotEmpty() }?.let {
+                    Text("👥 aussi dégusté par ${it.joinToString(", ")}", color = WineColors.muted, fontSize = 12.sp)
                 }
                 // Commentaire visible (parité iOS) — manquait sur l’APK
                 item.comment?.takeIf { it.isNotBlank() }?.let { c ->
@@ -2768,6 +2815,13 @@ private fun CheckinDetailSheet(vm: AppViewModel, item: CheckinItem) {
 
             WeenoStarRating(item.rating)
 
+            rebuyLabel(item.rebuy)?.let {
+                Text(it, color = WineColors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+            item.alsoTastedBy?.takeIf { it.isNotEmpty() }?.let {
+                Text("👥 aussi dégusté par ${it.joinToString(", ")}", color = WineColors.muted, fontSize = 12.sp)
+            }
+
             item.flavors?.takeIf { it.isNotEmpty() }?.let {
                 Text(
                     "Goûts : ${it.joinToString(", ")}",
@@ -2804,6 +2858,7 @@ private fun CheckinDetailSheet(vm: AppViewModel, item: CheckinItem) {
 private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
     val scope = rememberCoroutineScope()
     var rating by remember { mutableFloatStateOf(item.rating.toFloat()) }
+    var rebuy by remember { mutableStateOf(item.rebuy) }
     var comment by remember { mutableStateOf(item.comment.orEmpty()) }
     var location by remember { mutableStateOf(item.location.orEmpty()) }
     var flavors by remember { mutableStateOf(item.flavors.orEmpty().toSet()) }
@@ -2847,24 +2902,46 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
                 VivinoRatingSlider(rating, { rating = it }, onTick = { vm.hapticTick() })
             }
             WeenoCard {
+                RebuyChoiceRow(rebuy) { rebuy = it }
+            }
+            WeenoCard {
                 Text("Arômes & structure", color = WineColors.text, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                if (flavorTags.isNotEmpty()) {
-                    WeenoTagDropdownField(
-                        label = "",
-                        tags = flavorTags,
-                        selected = flavors,
-                        maxCount = 8
-                    ) { tag ->
-                        flavors = if (tag in flavors) flavors - tag else if (flavors.size < 8) flavors + tag else flavors
+                if (flavors.isNotEmpty()) {
+                    FlowRowWrap {
+                        flavors.sorted().forEach { tag ->
+                            Text(
+                                "$tag ×",
+                                color = WineColors.accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(WineColors.accent.copy(alpha = 0.2f))
+                                    .border(0.5.dp, WineColors.accent.copy(alpha = 0.65f), RoundedCornerShape(999.dp))
+                                    .clickable { flavors = flavors - tag }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                CustomTagInput("ex. pierre chaude, salin…", customFlavor, { customFlavor = it }) {
-                    val t = customFlavor.trim()
-                    if (t.isNotBlank() && flavors.size < 8) {
-                        flavors = flavors + t
-                        customFlavor = ""
+                FlavorSuggestInput(
+                    placeholder = "ex. pierre chaude, salin…",
+                    input = customFlavor,
+                    onInput = { customFlavor = it },
+                    catalog = flavorTags,
+                    selected = flavors
+                ) { raw ->
+                    var tag = raw.trim().replace(Regex("\\s+"), " ")
+                    if (tag.length > 40) tag = tag.take(40)
+                    val preset = flavorTags.firstOrNull { it.equals(tag, ignoreCase = true) }
+                    if (preset != null) tag = preset
+                    when {
+                        tag.isBlank() -> {}
+                        flavors.any { it.equals(tag, ignoreCase = true) } -> vm.showToast("Déjà ajouté", ToastPayload.Variant.WARN)
+                        flavors.size >= 12 -> vm.showToast("Max 12 tags", ToastPayload.Variant.WARN)
+                        else -> flavors = flavors + tag
                     }
                 }
             }
@@ -2909,7 +2986,8 @@ private fun CheckinEditSheet(vm: AppViewModel, item: CheckinItem) {
                             hops = hops.toList(),
                             comment = comment,
                             hiddenFromPartner = if (vm.isAdmin) hidden else null,
-                            location = location.take(300)
+                            location = location.take(300),
+                            rebuy = rebuy
                         )
                         if (removePhoto) {
                             try { vm.api.removeCheckinPhoto(item.id) } catch (_: Exception) {}
