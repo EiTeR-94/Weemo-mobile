@@ -371,8 +371,16 @@ class WineAPI private constructor(context: Context) {
 
     /** Weeno state — enabled=false si RPG off / non autorisé. */
     suspend fun rpgMe(): RpgState = withContext(Dispatchers.IO) {
-        // Weeno pas encore activé côté serveur
-        RpgState(enabled = false)
+        try {
+            val (body, code) = execute(
+                requestBuilder("api/rpg/me").get().build(),
+                allowUnauthorizedBody = true
+            )
+            if (code !in 200..299) return@withContext RpgState(enabled = false)
+            gson.fromJson(body, RpgState::class.java) ?: RpgState(enabled = false)
+        } catch (_: Exception) {
+            RpgState(enabled = false)
+        }
     }
 
     suspend fun rpgSetClass(classKey: String): Boolean = withContext(Dispatchers.IO) {

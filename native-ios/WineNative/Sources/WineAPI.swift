@@ -482,9 +482,14 @@ final class WineAPI {
         return decoded
     }
 
-    /// Weeno Quest pas encore sur le backend — toujours off (évite 404 + UI RPG bière).
     func rpgMe() async throws -> RpgState {
-        return RpgState(enabled: false)
+        let (data, http, _) = try await request(path: "/api/rpg/me", method: "GET", body: nil)
+        if http.statusCode == 401 { throw WineAPIError.unauthorized }
+        if http.statusCode == 403 { throw WineAPIError.forbidden }
+        guard http.statusCode >= 200 && http.statusCode < 300 else {
+            return RpgState(enabled: false)
+        }
+        return (try? JSONDecoder().decode(RpgState.self, from: data)) ?? RpgState(enabled: false)
     }
 
     func rpgSetClass(_ key: String) async throws -> Bool {
