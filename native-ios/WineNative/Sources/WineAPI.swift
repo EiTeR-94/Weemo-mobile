@@ -1490,6 +1490,51 @@ final class WineAPI {
         )
     }
 
+    /// POST /api/label-memory/lookup — mémoire serveur partagée étiquette → vin, avant labelScan.
+    func labelMemoryLookup(d: String, a: String) async throws -> LabelMemoryMatch? {
+        let body = try JSONSerialization.data(withJSONObject: ["d": d, "a": a])
+        let (data, http, _) = try await request(path: "/api/label-memory/lookup", method: "POST", body: body, contentType: "application/json")
+        try throwIfUnauthorized(http.statusCode)
+        guard http.statusCode < 400,
+              let decoded = try? JSONDecoder().decode(LabelMemoryLookupResponse.self, from: data)
+        else { return nil }
+        return decoded.match
+    }
+
+    /// POST /api/label-memory/remember — enrichit la mémoire partagée après validation d'un vin (best-effort).
+    func labelMemoryRemember(d: String, a: String, wine: WineProduct) async {
+        var winePayload: [String: Any] = [
+            "wine_name": wine.wineName,
+            "producer": wine.producer,
+            "wine_color": wine.styleFr ?? wine.style
+        ]
+        if let vintage = wine.vintage { winePayload["vintage"] = vintage }
+        if let region = wine.region { winePayload["region"] = region }
+        if let country = wine.country { winePayload["country"] = country }
+        if let abv = wine.abv { winePayload["abv"] = abv }
+        if let grapes = wine.grapes { winePayload["grapes"] = grapes }
+        if let vivinoBid = wine.vivinoBid { winePayload["vivino_id"] = vivinoBid }
+        if let photoURL = wine.photoURL { winePayload["photo_url"] = photoURL }
+        let payload: [String: Any] = ["d": d, "a": a, "wine": winePayload]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        _ = try? await request(path: "/api/label-memory/remember", method: "POST", body: body, contentType: "application/json")
+    }
+
+    /// POST /api/label-memory/hit — renforce le score d'un match confirmé (best-effort).
+    func labelMemoryHit(id: Int) async {
+        guard let body = try? JSONSerialization.data(withJSONObject: ["id": id]) else { return }
+        _ = try? await request(path: "/api/label-memory/hit", method: "POST", body: body, contentType: "application/json")
+    }
+
+    /// POST /api/label-memory/reject — signale un mauvais match (best-effort).
+    func labelMemoryReject(id: Int, d: String? = nil, a: String? = nil) async {
+        var payload: [String: Any] = ["id": id]
+        if let d { payload["d"] = d }
+        if let a { payload["a"] = a }
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        _ = try? await request(path: "/api/label-memory/reject", method: "POST", body: body, contentType: "application/json")
+    }
+
     func addHop(_ name: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["name": name])
         let (_, http, _) = try await request(path: "/api/hops", method: "POST", body: body, contentType: "application/json")

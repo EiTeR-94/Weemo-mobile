@@ -616,6 +616,62 @@ struct VivinoHit: Decodable, Identifiable, Hashable {
     }
 }
 
+/// Vin normalisé tel que stocké par la mémoire étiquette serveur (label_memory.normalize_wine).
+struct LabelMemoryWine: Decodable {
+    let wineName: String?
+    let producer: String?
+    let vintage: Int?
+    let wineColor: String?
+    let region: String?
+    let country: String?
+    let abv: Double?
+    let vivinoId: Int?
+    let photoURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case producer, vintage, region, country, abv
+        case wineName = "wine_name"
+        case wineColor = "wine_color"
+        case vivinoId = "vivino_id"
+        case photoURL = "photo_url"
+    }
+
+    func toProduct() -> WineProduct {
+        WineProduct(
+            wineName: wineName ?? "",
+            producer: producer ?? "",
+            style: wineColor ?? "Unknown",
+            styleFr: wineColor,
+            abv: abv,
+            vivinoBid: vivinoId,
+            photoURL: photoURL,
+            vintage: vintage,
+            region: region,
+            country: country
+        )
+    }
+}
+
+struct LabelMemoryMatch: Decodable {
+    let id: Int
+    let wine: LabelMemoryWine?
+    let distance: Int
+    let dDist: Int?
+    let aDist: Int?
+    let confidence: String?
+    let ambiguous: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, wine, distance, confidence, ambiguous
+        case dDist = "d_dist"
+        case aDist = "a_dist"
+    }
+}
+
+struct LabelMemoryLookupResponse: Decodable {
+    let match: LabelMemoryMatch?
+}
+
 /// Résultat POST /api/label-scan (backend serveur configurable Vivino-vision ou Gemini + candidats Vivino).
 struct LabelScanResult {
     let ok: Bool

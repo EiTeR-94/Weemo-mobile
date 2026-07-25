@@ -199,6 +199,48 @@ data class VivinoHit(
     @SerializedName("vivino_url") val vivinoURL: String? = null
 )
 
+/** Vin normalisé tel que stocké par la mémoire étiquette serveur (label_memory.normalize_wine). */
+data class LabelMemoryWine(
+    @SerializedName("wine_name") val wineName: String? = null,
+    val producer: String? = null,
+    val vintage: Int? = null,
+    @SerializedName("wine_color") val wineColor: String? = null,
+    val region: String? = null,
+    val country: String? = null,
+    val abv: Double? = null,
+    @SerializedName("vivino_id") val vivinoId: Int? = null,
+    @SerializedName("photo_url") val photoUrl: String? = null
+) {
+    fun toProduct(): WineProduct = WineProduct(
+        wineName = wineName.orEmpty(),
+        producer = producer.orEmpty(),
+        style = wineColor ?: "Unknown",
+        styleFr = wineColor,
+        abv = abv,
+        vivinoId = vivinoId,
+        photoURL = photoUrl,
+        vintage = vintage,
+        region = region,
+        country = country
+    )
+}
+
+data class LabelMemoryMatch(
+    val id: Int = 0,
+    val wine: LabelMemoryWine? = null,
+    val distance: Int = 64,
+    @SerializedName("d_dist") val dDist: Int? = null,
+    @SerializedName("a_dist") val aDist: Int? = null,
+    val confidence: String? = null,
+    val ambiguous: Boolean = false
+)
+
+data class LabelMemoryLookupResponse(
+    val match: LabelMemoryMatch? = null,
+    @SerializedName("auto_max") val autoMax: Int = 4,
+    @SerializedName("confirm_max") val confirmMax: Int = 8
+)
+
 data class LabelScanResult(
     val ok: Boolean = true,
     val aiAvailable: Boolean = false,

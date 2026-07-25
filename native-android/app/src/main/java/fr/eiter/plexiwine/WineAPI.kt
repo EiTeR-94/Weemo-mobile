@@ -987,6 +987,63 @@ class WineAPI private constructor(context: Context) {
         )
     }
 
+    /** POST /api/label-memory/lookup — mémoire serveur partagée étiquette → vin, avant labelScan. */
+    suspend fun labelMemoryLookup(d: String, a: String): LabelMemoryMatch? {
+        val json = gson.toJson(mapOf("d" to d, "a" to a))
+        val (body, _) = execute(requestBuilder("api/label-memory/lookup").post(json.toRequestBody(JSON)).build())
+        return try {
+            gson.fromJson(body, LabelMemoryLookupResponse::class.java)?.match
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** POST /api/label-memory/remember — enrichit la mémoire partagée après validation d'un vin (best-effort). */
+    suspend fun labelMemoryRemember(d: String, a: String, wine: WineProduct) {
+        val payload = mapOf(
+            "d" to d,
+            "a" to a,
+            "wine" to mapOf(
+                "wine_name" to wine.wineName,
+                "producer" to wine.producer,
+                "vintage" to wine.vintage,
+                "wine_color" to (wine.styleFr ?: wine.style),
+                "region" to wine.region,
+                "country" to wine.country,
+                "abv" to wine.abv,
+                "vivino_id" to wine.vivinoId,
+                "photo_url" to wine.photoURL
+            )
+        )
+        try {
+            execute(requestBuilder("api/label-memory/remember").post(gson.toJson(payload).toRequestBody(JSON)).build())
+        } catch (_: Exception) {
+            // best-effort — comme le webapp, ne bloque jamais le wizard
+        }
+    }
+
+    /** POST /api/label-memory/hit — renforce le score d'un match confirmé (best-effort). */
+    suspend fun labelMemoryHit(id: Int) {
+        try {
+            val json = gson.toJson(mapOf("id" to id))
+            execute(requestBuilder("api/label-memory/hit").post(json.toRequestBody(JSON)).build())
+        } catch (_: Exception) {
+            // best-effort
+        }
+    }
+
+    /** POST /api/label-memory/reject — signale un mauvais match (best-effort). */
+    suspend fun labelMemoryReject(id: Int, d: String? = null, a: String? = null) {
+        try {
+            val payload = mutableMapOf<String, Any?>("id" to id)
+            if (d != null) payload["d"] = d
+            if (a != null) payload["a"] = a
+            execute(requestBuilder("api/label-memory/reject").post(gson.toJson(payload).toRequestBody(JSON)).build())
+        } catch (_: Exception) {
+            // best-effort
+        }
+    }
+
     suspend fun scanPhoto(jpeg: ByteArray): LookupResponse {
         val scan = labelScan(jpeg)
         val c0 = scan.candidates.firstOrNull()

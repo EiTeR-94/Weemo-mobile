@@ -61,6 +61,12 @@ struct WineWizardView: View {
     @State private var showDuplicate = false
     @State private var duplicateDetail = ""
 
+    // Mémoire étiquette (dHash/aHash → vin déjà connu, court-circuite Vivino/IA au rescan).
+    @State private var labelMemoryPrint: (d: String, a: String)?
+    @State private var labelMemoryHitId: Int?
+    @State private var labelMemoryConfirmMatch: LabelMemoryMatch?
+    @State private var showLabelMemoryConfirm = false
+
     private var manualStyleOptions: [(String, String)] {
         var opts: [(String, String)] = [("", "Choisir…")]
         opts.append(contentsOf: styleOptions.filter { !$0.value.isEmpty }.map { ($0.value, $0.label) })
@@ -152,6 +158,29 @@ struct WineWizardView: View {
                  ? "Ajouter cette nouvelle note à ton historique ?"
                  : duplicateDetail)
         }
+        .alert("Mémoire étiquette ?", isPresented: $showLabelMemoryConfirm) {
+            Button("Non", role: .cancel) {
+                let match = labelMemoryConfirmMatch
+                let print = labelMemoryPrint
+                Task { await app.api.labelMemoryReject(id: match?.id ?? 0, d: print?.d, a: print?.a) }
+                if let img = labelPreview {
+                    Task { await processScanPhoto(img, skipMemory: true) }
+                }
+            }
+            Button("Oui, c’est ça") {
+                applyLabelMemoryMatch(labelMemoryConfirmMatch, confirmed: true)
+            }
+        } message: {
+            Text(labelMemoryConfirmBits.isEmpty
+                 ? "Étiquette proche en mémoire — c’est bien ce vin ?"
+                 : "Étiquette proche en mémoire :\n\(labelMemoryConfirmBits)\n\nC’est bien ce vin ?")
+        }
+    }
+
+    private var labelMemoryConfirmBits: String {
+        guard let w = labelMemoryConfirmMatch?.wine else { return "" }
+        return [w.producer, w.wineName, w.vintage.map(String.init)]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func updateKeyboardHeight(from note: Notification) {
@@ -344,11 +373,25 @@ struct WineWizardView: View {
 
             if let product, !product.wineName.isEmpty {
                 WeenoPreviewCard(product: product)
+                if labelMemoryHitId != nil {
+                    Text("Mémoire serveur (tous les users) — signale si ce n’est pas le bon vin.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                }
                 WeenoSecondaryButton(title: "Changer de vin") {
+                    if let hitId = labelMemoryHitId {
+                        let print = labelMemoryPrint
+                        Task { await app.api.labelMemoryReject(id: hitId, d: print?.d, a: print?.a) }
+                    }
                     clearProduct()
                     labelPreview = nil
                 }
-                WeenoPrimaryButton(title: "Continuer → photo") { step = 2 }
+                WeenoPrimaryButton(title: "Continuer → photo") {
+                    if let hitId = labelMemoryHitId {
+                        Task { await app.api.labelMemoryHit(id: hitId) }
+                    }
+                    step = 2
+                }
             }
         }
     }
@@ -533,13 +576,53 @@ struct WineWizardView: View {
 
     // MARK: - Actions
 
-    private func processScanPhoto(_ image: UIImage) async {
+    /// Applique un match mémoire étiquette (auto ou confirmé) et notifie le serveur (hit).
+    private func applyLabelMemoryMatch(_ match: LabelMemoryMatch?, confirmed: Bool) {
+        guard let match, let wine = match.wine else { return }
+        labelMemoryHitId = match.id
+        product = wine.toProduct()
+        let bits = [wine.producer, wine.wineName, wine.vintage.map(String.init)]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        scanStatus = confirmed
+            ? "Mémoire étiquette (confirmé) · \(bits)"
+            : "Mémoire étiquette (sûr) · \(bits)"
+        app.showToast(confirmed ? "Étiquette confirmée" : "Étiquette reconnue", variant: .success)
+    }
+
+    /// Mémoire serveur partagée étiquette → vin (avant tout appel réseau Vivino/IA).
+    /// @return true si géré (match auto appliqué, ou confirm en attente de validation via alert).
+    private func tryApplyLabelMemory(_ image: UIImage) async -> Bool {
+        guard app.networkStatus == .online, let print = LabelPrint.compute(image) else { return false }
+        labelMemoryPrint = print
+        guard let match = try? await app.api.labelMemoryLookup(d: print.d, a: print.a),
+              match.wine != nil
+        else { return false }
+        if match.confidence == "confirm" {
+            labelMemoryConfirmMatch = match
+            showLabelMemoryConfirm = true
+            return true
+        }
+        if match.confidence == "auto" {
+            applyLabelMemoryMatch(match, confirmed: false)
+            return true
+        }
+        return false
+    }
+
+    private func processScanPhoto(_ image: UIImage, skipMemory: Bool = false) async {
         labelPreview = image
+        if !skipMemory {
+            labelMemoryPrint = nil
+            labelMemoryHitId = nil
+        }
         guard let raw = image.jpegData(compressionQuality: 0.92) else { return }
         let jpeg = WineImageUtils.compressJPEG(raw)
         busy = true
         scanStatus = "Analyse de l’étiquette…"
         defer { busy = false }
+        if !skipMemory, await tryApplyLabelMemory(image) {
+            return
+        }
         do {
             let scan = try await app.api.labelScan(jpeg: jpeg)
             if let n = scan.wineName, !n.isEmpty {
@@ -612,6 +695,9 @@ struct WineWizardView: View {
             summary: summary
         )
         scanStatus = "Saisie manuelle ✓"
+        if let print = labelMemoryPrint, let p = product {
+            Task { await app.api.labelMemoryRemember(d: print.d, a: print.a, wine: p) }
+        }
         step = 2
     }
 
@@ -705,6 +791,9 @@ struct WineWizardView: View {
         } catch {
             scanStatus = "Base OK — enrichissement indisponible"
         }
+        if let print = labelMemoryPrint, let p = product {
+            await app.api.labelMemoryRemember(d: print.d, a: print.a, wine: p)
+        }
     }
 
     private func processTastingPhoto(_ image: UIImage) async {
@@ -793,6 +882,7 @@ struct WineWizardView: View {
     private func clearProduct() {
         product = nil
         vivinoResults = []
+        labelMemoryHitId = nil
         scanStatus = "Cadre l’étiquette — touche pour photo"
     }
 
@@ -843,5 +933,9 @@ struct WineWizardView: View {
         noteAbv = ""
         scanStatus = "Cadre l’étiquette — touche pour photo"
         duplicateDetail = ""
+        labelMemoryPrint = nil
+        labelMemoryHitId = nil
+        labelMemoryConfirmMatch = nil
+        showLabelMemoryConfirm = false
     }
 }

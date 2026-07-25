@@ -72,6 +72,82 @@ object ImageUtils {
     }
 
     /**
+     * Empreinte visuelle étiquette (dHash + aHash), crop centre — miroir de
+     * app/static/js/label-cache.js côté serveur (mêmes constantes : crop 78%,
+     * grille dHash 9x8, grille aHash 8x8, luma 0.299/0.587/0.114).
+     * @return Pair(dHashHex16, aHashHex16) ou null si le bitmap est invalide.
+     */
+    fun computeLabelPrint(bmp: Bitmap): Pair<String, String>? {
+        if (bmp.width <= 0 || bmp.height <= 0) return null
+        val side = (minOf(bmp.width, bmp.height) * 0.78f).toInt().coerceAtLeast(1)
+        val cx = ((bmp.width - side) / 2).coerceIn(0, bmp.width - side)
+        val cy = ((bmp.height - side) / 2).coerceIn(0, bmp.height - side)
+        val cropped = Bitmap.createBitmap(bmp, cx, cy, side, side)
+        try {
+            val d = dHash(cropped)
+            val a = aHash(cropped)
+            return d to a
+        } finally {
+            if (cropped !== bmp) cropped.recycle()
+        }
+    }
+
+    private fun luma(px: Int): Float {
+        val r = (px shr 16) and 0xFF
+        val g = (px shr 8) and 0xFF
+        val b = px and 0xFF
+        return 0.299f * r + 0.587f * g + 0.114f * b
+    }
+
+    private fun bitsToHex(bits: String): String {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < bits.length) {
+            val nibble = bits.substring(i, minOf(i + 4, bits.length))
+            sb.append(Integer.toString(Integer.parseInt(nibble, 2), 16))
+            i += 4
+        }
+        return sb.toString()
+    }
+
+    private fun dHash(src: Bitmap): String {
+        val w = 9
+        val h = 8
+        val scaled = Bitmap.createScaledBitmap(src, w, h, true)
+        val gray = Array(h) { y -> FloatArray(w) { x -> luma(scaled.getPixel(x, y)) } }
+        if (scaled !== src) scaled.recycle()
+        val bits = StringBuilder()
+        for (y in 0 until h) {
+            for (x in 0 until w - 1) {
+                bits.append(if (gray[y][x] < gray[y][x + 1]) '1' else '0')
+            }
+        }
+        return bitsToHex(bits.toString())
+    }
+
+    private fun aHash(src: Bitmap): String {
+        val size = 8
+        val scaled = Bitmap.createScaledBitmap(src, size, size, true)
+        val n = size * size
+        val gray = FloatArray(n)
+        var sum = 0f
+        var i = 0
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val v = luma(scaled.getPixel(x, y))
+                gray[i] = v
+                sum += v
+                i += 1
+            }
+        }
+        if (scaled !== src) scaled.recycle()
+        val avg = sum / n
+        val bits = StringBuilder()
+        for (v in gray) bits.append(if (v >= avg) '1' else '0')
+        return bitsToHex(bits.toString())
+    }
+
+    /**
      * Map un rect en coords preview (pixels) → fractions image, pour ScaleType.FILL_CENTER.
      * Preview = view size, image = photo size (orientée).
      */

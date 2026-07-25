@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1103,6 +1104,11 @@ private fun WeenoWizard(vm: AppViewModel) {
     var pendingCapture by remember { mutableStateOf<File?>(null) }
     var captureMode by remember { mutableStateOf("photo") } // photo | scan
     var showLabelAutoScanner by remember { mutableStateOf(false) }
+    // Mémoire étiquette (dHash/aHash → vin déjà connu, court-circuite Vivino/IA au rescan).
+    var labelMemoryPrint by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var labelMemoryHitId by remember { mutableStateOf<Int?>(null) }
+    var labelMemoryConfirmMatch by remember { mutableStateOf<LabelMemoryMatch?>(null) }
+    var showLabelMemoryConfirm by remember { mutableStateOf(false) }
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -1160,6 +1166,10 @@ private fun WeenoWizard(vm: AppViewModel) {
         scanStatus = "Cadre l’étiquette — touche pour photo"
         photoFile = null
         labelPhotoFile = null
+        labelMemoryPrint = null
+        labelMemoryHitId = null
+        showLabelMemoryConfirm = false
+        labelMemoryConfirmMatch = null
         location = ""
         rating = 3f
         rebuy = null
@@ -1181,13 +1191,60 @@ private fun WeenoWizard(vm: AppViewModel) {
         vm.wizardStep = 1
     }
 
-    // Partagé entre : photo caméra système (mode scan) et LabelAutoScanner (capture auto OCR).
-    fun runLabelAnalysis(f: File) {
+    /**
+     * Mémoire serveur partagée étiquette → vin (avant tout appel réseau Vivino/IA).
+     * @return true si un match "auto" a été appliqué, ou si un match "confirm" est en attente
+     * de validation utilisateur (dialog) — dans les deux cas l'appelant doit s'arrêter là.
+     */
+    suspend fun tryApplyLabelMemory(f: File): Boolean {
+        val bmp = try {
+            BitmapFactory.decodeFile(f.absolutePath)
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        val print = try {
+            ImageUtils.computeLabelPrint(bmp)
+        } finally {
+            bmp.recycle()
+        } ?: return false
+        labelMemoryPrint = print
+        val match = try {
+            api.labelMemoryLookup(print.first, print.second)
+        } catch (_: Exception) {
+            null
+        }
+        val wine = match?.wine ?: return false
+        if (match.confidence == "confirm") {
+            labelMemoryConfirmMatch = match
+            showLabelMemoryConfirm = true
+            return true
+        }
+        if (match.confidence == "auto") {
+            labelMemoryHitId = match.id
+            product = wine.toProduct()
+            val bits = listOfNotNull(wine.producer, wine.wineName, wine.vintage?.toString()).joinToString(" · ")
+            scanStatus = "Mémoire étiquette (sûr) · $bits"
+            vm.showToast("Étiquette reconnue", ToastPayload.Variant.SUCCESS)
+            return true
+        }
+        return false
+    }
+
+    // Partagé entre : photo caméra système (mode scan), LabelAutoScanner (capture auto OCR)
+    // et le bouton "Lancer le scan". skipMemory=true après un refus explicite d'un match mémoire.
+    fun runLabelAnalysis(f: File, skipMemory: Boolean = false) {
         labelPhotoFile = f
+        if (!skipMemory) {
+            labelMemoryPrint = null
+            labelMemoryHitId = null
+        }
         scope.launch {
             busy = true
             scanStatus = "Analyse de l’étiquette…"
             try {
+                if (!skipMemory && vm.isEffectivelyOnline() && tryApplyLabelMemory(f)) {
+                    return@launch
+                }
                 val jpeg = ImageUtils.compressJPEG(f.readBytes())
                 val scan = api.labelScan(jpeg)
                 if (!scan.wineName.isNullOrBlank() || !scan.producer.isNullOrBlank()) {
@@ -1330,6 +1387,34 @@ private fun WeenoWizard(vm: AppViewModel) {
         }
     }
 
+    if (showLabelMemoryConfirm && labelMemoryConfirmMatch?.wine != null) {
+        val match = labelMemoryConfirmMatch!!
+        val w = match.wine!!
+        val bits = listOfNotNull(w.producer, w.wineName, w.vintage?.toString()).joinToString(" · ")
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Mémoire étiquette ?") },
+            text = { Text("Étiquette proche en mémoire :\n$bits\n\nC'est bien ce vin ?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLabelMemoryConfirm = false
+                    labelMemoryHitId = match.id
+                    product = w.toProduct()
+                    scanStatus = "Mémoire étiquette (confirmé) · $bits"
+                    vm.showToast("Étiquette confirmée", ToastPayload.Variant.SUCCESS)
+                }) { Text("Oui, c’est ça") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showLabelMemoryConfirm = false
+                    val print = labelMemoryPrint
+                    scope.launch { api.labelMemoryReject(match.id, print?.first, print?.second) }
+                    labelPhotoFile?.let { runLabelAnalysis(it, skipMemory = true) }
+                }) { Text("Non") }
+            }
+        )
+    }
+
     if (showDuplicate) {
         AlertDialog(
             onDismissRequest = { showDuplicate = false },
@@ -1409,38 +1494,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                         Spacer(Modifier.height(8.dp))
                         WeenoPrimaryButton("Lancer le scan") {
                             val f = labelPhotoFile ?: return@WeenoPrimaryButton
-                            scope.launch {
-                                busy = true
-                                scanStatus = "Analyse de l’étiquette…"
-                                try {
-                                    val jpeg = ImageUtils.compressJPEG(f.readBytes())
-                                    val scan = api.labelScan(jpeg)
-                                    if (!scan.producer.isNullOrBlank()) vivinoProducer = scan.producer!!
-                                    if (!scan.wineName.isNullOrBlank()) {
-                                        vivinoQuery = listOfNotNull(scan.producer, scan.wineName)
-                                            .filter { it.isNotBlank() }.joinToString(" ")
-                                    }
-                                    if (scan.candidates.isNotEmpty()) {
-                                        vivinoResults = scan.candidates.take(5)
-                                        scanStatus = "Étiquette lue — choisis le bon vin"
-                                        vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
-                                    } else if (scan.aiAvailable) {
-                                        scanStatus = scan.hint
-                                            ?: "Étiquette lue — aucun candidat, cherche sur Vivino"
-                                    } else {
-                                        showManual = true
-                                        scanStatus = scan.hint ?: scan.aiError
-                                            ?: "Aucun candidat — cherche sur Vivino"
-                                    }
-                                } catch (e: Exception) {
-                                    val m = e.message ?: "Erreur"
-                                    scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
-                                        "Erreur lecture réponse scan — mets à jour l’app"
-                                    } else m
-                                } finally {
-                                    busy = false
-                                }
-                            }
+                            runLabelAnalysis(f)
                         }
                     }
                 }
@@ -1543,6 +1597,9 @@ private fun WeenoWizard(vm: AppViewModel) {
                                             vm.showToast("Vin sélectionné ✓", ToastPayload.Variant.SUCCESS)
                                         } finally {
                                             busy = false
+                                        }
+                                        labelMemoryPrint?.let { (d, a) ->
+                                            product?.let { p -> api.labelMemoryRemember(d, a, p) }
                                         }
                                     }
                                 }
@@ -1655,6 +1712,10 @@ private fun WeenoWizard(vm: AppViewModel) {
                                     summary = summary
                                 )
                                 scanStatus = "Saisie manuelle ✓"
+                                labelMemoryPrint?.let { (d, a) ->
+                                    val p = product!!
+                                    scope.launch { api.labelMemoryRemember(d, a, p) }
+                                }
                                 vm.wizardStep = 2
                             }
                         }
@@ -1663,12 +1724,28 @@ private fun WeenoWizard(vm: AppViewModel) {
 
                 product?.takeIf { it.wineName.isNotBlank() }?.let { p ->
                     WeenoPreviewCard(p)
+                    if (labelMemoryHitId != null) {
+                        Text(
+                            "Mémoire serveur (tous les users) — signale si ce n'est pas le bon vin.",
+                            color = WineColors.muted,
+                            fontSize = 11.sp
+                        )
+                    }
                     WeenoSecondaryButton("Changer de vin") {
+                        val hitId = labelMemoryHitId
+                        val print = labelMemoryPrint
+                        if (hitId != null) {
+                            scope.launch { api.labelMemoryReject(hitId, print?.first, print?.second) }
+                        }
                         product = null
+                        labelMemoryHitId = null
                         labelPhotoFile = null
                         scanStatus = "Cadre l’étiquette — touche pour photo"
                     }
-                    WeenoPrimaryButton("Continuer → photo") { vm.wizardStep = 2 }
+                    WeenoPrimaryButton("Continuer → photo") {
+                        labelMemoryHitId?.let { id -> scope.launch { api.labelMemoryHit(id) } }
+                        vm.wizardStep = 2
+                    }
                 }
             }
 
