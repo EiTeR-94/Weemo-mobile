@@ -1193,21 +1193,26 @@ private fun WeenoWizard(vm: AppViewModel) {
                     scanStatus = if (scan.aiAvailable) "Étiquette lue — choisis le bon vin"
                     else "Scan partiel — suggestions Vivino"
                     vm.showToast("${scan.candidates.size} suggestion(s)", ToastPayload.Variant.SUCCESS)
-                } else if (scan.aiAvailable) {
-                    scanStatus = scan.hint
-                        ?: "Étiquette lue — aucun candidat Vivino, cherche ou saisis"
-                    if (vivinoQuery.length >= 2) {
-                        // laisse l’utilisateur chercher ; query déjà préremplie
-                    }
                 } else {
-                    showManual = true
                     val raw = (scan.aiError ?: scan.hint ?: "").lowercase()
-                    scanStatus = when {
-                        !scan.hint.isNullOrBlank() -> scan.hint!!
-                        !scan.aiError.isNullOrBlank() -> scan.aiError!!
-                        raw.contains("429") || raw.contains("quota") || raw.contains("rate") ->
-                            "Scan temporairement saturé — réessaie ou saisie manuelle"
-                        else -> "Scan indisponible — saisis ou cherche sur Vivino"
+                    val isPersistentError = raw.contains("429") || raw.contains("quota") || raw.contains("rate") ||
+                        raw.contains("clé") || raw.contains("key") || raw.contains("no_provider") ||
+                        raw.contains("réseau") || raw.contains("network") || raw.contains("connexion")
+                    if (isPersistentError) {
+                        // Panne durable (quota/clé/réseau) : inutile de relancer tout de suite,
+                        // on laisse la main (saisie/Vivino manuelle).
+                        showManual = true
+                        scanStatus = when {
+                            !scan.hint.isNullOrBlank() -> scan.hint!!
+                            !scan.aiError.isNullOrBlank() -> scan.aiError!!
+                            else -> "Scan temporairement saturé — réessaie ou saisie manuelle"
+                        }
+                    } else {
+                        // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
+                        // Vivino, on ne bloque pas sur un écran d'échec : on relance juste le scan live.
+                        scanStatus = scan.hint ?: "Rien reconnu — continue de scanner"
+                        delay(400)
+                        showLabelAutoScanner = true
                     }
                 }
             } catch (e: Exception) {

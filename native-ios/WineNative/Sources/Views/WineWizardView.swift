@@ -554,24 +554,29 @@ struct WineWizardView: View {
                 vivinoResults = Array(scan.candidates.prefix(5))
                 scanStatus = "Étiquette lue — tape le bon vin (\(scan.candidates.count) suggestion(s))"
                 app.showToast("\(scan.candidates.count) suggestion(s)", variant: .success)
-            } else if scan.aiAvailable {
-                scanStatus = scan.hint
-                    ?? "Étiquette lue — aucun candidat Vivino, affine la recherche"
-                if vivinoQuery.count >= 2 { await searchVivino() }
             } else {
                 let raw = (scan.aiError ?? scan.hint ?? "").lowercased()
-                if let h = scan.hint, !h.isEmpty {
-                    scanStatus = h
-                } else if raw.contains("429") || raw.contains("quota") || raw.contains("rate") {
-                    scanStatus = "Scan temporairement saturé — réessaie dans 1 min ou saisie manuelle"
-                } else if raw.contains("clé") || raw.contains("key") || raw.contains("aucune") || raw.contains("no_provider") {
-                    scanStatus = "Scan IA indisponible (config serveur) — saisie / Vivino manuelle"
-                } else if let err = scan.aiError, !err.isEmpty {
-                    scanStatus = "Échec scan : \(err.prefix(140))"
+                let isPersistentError = raw.contains("429") || raw.contains("quota") || raw.contains("rate")
+                    || raw.contains("clé") || raw.contains("key") || raw.contains("no_provider")
+                    || raw.contains("réseau") || raw.contains("network") || raw.contains("connexion")
+                if isPersistentError {
+                    // Panne durable (quota/clé/réseau) : inutile de relancer tout de suite,
+                    // on laisse la main (saisie/Vivino manuelle).
+                    if raw.contains("429") || raw.contains("quota") || raw.contains("rate") {
+                        scanStatus = "Scan temporairement saturé — réessaie dans 1 min ou saisie manuelle"
+                    } else if raw.contains("clé") || raw.contains("key") || raw.contains("no_provider") {
+                        scanStatus = "Scan IA indisponible (config serveur) — saisie / Vivino manuelle"
+                    } else {
+                        scanStatus = scan.hint ?? "Échec scan : \((scan.aiError ?? "").prefix(140))"
+                    }
+                    showManual = true
                 } else {
-                    scanStatus = "Scan indisponible — saisis le vin ou cherche sur Vivino"
+                    // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
+                    // Vivino, on ne bloque pas sur un écran d'échec : on relance juste le scan live.
+                    scanStatus = scan.hint ?? "Rien reconnu — continue de scanner"
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    showScanCamera = true
                 }
-                showManual = true
             }
         } catch let err {
             let m = err.localizedDescription
