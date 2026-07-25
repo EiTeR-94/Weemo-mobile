@@ -11,7 +11,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     INFOPLIST_FILE: WineNative/Resources/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: fr.eiter.plexiwine
-    MARKETING_VERSION: "0.4.7"
+    MARKETING_VERSION: "0.4.8"
     CURRENT_PROJECT_VERSION: "25"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""

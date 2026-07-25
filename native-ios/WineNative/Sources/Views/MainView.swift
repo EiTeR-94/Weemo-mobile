@@ -532,7 +532,7 @@ private struct AccountMenuOverlay: View {
                 section("Admin")
                 item("⚙️ Administration") { onOpen(.admin) }
                 // Toujours visible admin : même si Weeno Quest est coupé (pour le rallumer)
-                item("⚔ Quest (bientôt)") { onOpen(.rpgAdmin) }
+                item("⚔ Quest") { onOpen(.rpgAdmin) }
                 item("📝 Patch notes") { onOpen(.patchnotes) }
             }
 

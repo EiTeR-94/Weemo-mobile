@@ -121,11 +121,14 @@ private fun levelFrameFor(profile: RpgProfile): LevelFrame {
     val band = profile.titleBand?.name
     return when {
         lvl <= 4 -> LevelFrame(
+            // Palier dédié (comme tous les autres) au lieu des couleurs génériques
+            // du thème — WineColors.accent/border sont trop proches du fond bordeaux
+            // pour ressortir, contrairement à l'ambre de Beer sur son fond bleu-gris.
             bandName = band ?: "Premiers pas",
-            border = WineColors.border,
-            borderWidth = 1.dp,
-            background = WineColors.card,
-            accent = WineColors.accent,
+            border = Silver.copy(alpha = 0.55f),
+            borderWidth = 1.5.dp,
+            background = Color(0xFF141821),
+            accent = Silver,
             sealRing = Silver,
         )
         lvl <= 8 -> LevelFrame(
@@ -514,13 +517,16 @@ private fun FicheAventurierCard(p: RpgProfile, state: RpgState, nActive: Int) {
     val master = p.beerMaster
     val className = p.classInfo?.name ?: p.classKey ?: "Aventurier"
     val classIcon = p.classInfo?.icon ?: "🍷"
+    // Même cadre coloré par palier que la barre HUD (au lieu du rosé générique
+    // du thème, trop peu contrasté sur fond bordeaux).
+    val frame = levelFrameFor(p)
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .border(
                 1.dp,
-                if (master) Gold.copy(alpha = 0.4f) else WineColors.border,
+                if (master) Gold.copy(alpha = 0.4f) else frame.border,
                 RoundedCornerShape(14.dp)
             )
             .background(
@@ -551,7 +557,7 @@ private fun FicheAventurierCard(p: RpgProfile, state: RpgState, nActive: Int) {
                         .size(64.dp)
                         .clip(CircleShape)
                         .background(WineColors.fieldBg)
-                        .border(2.5.dp, if (master) Gold else WineColors.accent, CircleShape),
+                        .border(2.5.dp, if (master) Gold else frame.accent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(p.displayIcon(), fontSize = 28.sp)

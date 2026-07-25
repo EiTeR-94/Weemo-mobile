@@ -107,7 +107,7 @@ struct GrimoireSheetView: View {
                                 .fill(Theme.fieldBg)
                                 .frame(width: 64, height: 64)
                             Circle()
-                                .stroke(master ? Color.yellow : Theme.accent, lineWidth: 2.5)
+                                .stroke(rpgTierAccent(level: p.level, isMaster: master), lineWidth: 2.5)
                                 .frame(width: 64, height: 64)
                             Text(p.displayIcon).font(.system(size: 28))
                             Text("\(p.level ?? 1)")
@@ -171,7 +171,7 @@ struct GrimoireSheetView: View {
                 }
                 .padding(14)
                 .background(cardBg(master: master))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(master ? Color.yellow.opacity(0.4) : Theme.border))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(master ? Color.yellow.opacity(0.4) : rpgTierAccent(level: p.level, isMaster: false).opacity(0.55)))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 // Quêtes en cours
@@ -1080,6 +1080,23 @@ struct BadgeTileView: View {
 }
 
 // HUD card (accueil app) — conservé pour MainView
+/// Couleur d'accent par palier de niveau — partagée entre le HUD compact
+/// (BqHudCard.frame) et la bague avatar de la fiche d'aventurier ci-dessus,
+/// qui restait auparavant figée sur Theme.accent quel que soit le niveau.
+private func rpgTierAccent(level: Int?, isMaster: Bool) -> Color {
+    if isMaster { return .yellow }
+    switch level ?? 1 {
+    case ...4: return Color(red: 0.58, green: 0.64, blue: 0.72)
+    case ...8: return .orange
+    case ...12: return .green
+    case ...16: return Color(red: 0.38, green: 0.65, blue: 0.98)
+    case ...20: return .purple
+    case ...24: return .yellow
+    case ...28: return .orange
+    default: return Color(red: 0.65, green: 0.55, blue: 0.98)
+    }
+}
+
 struct BqHudCard: View {
     let profile: RpgProfile
     var onTap: () -> Void
@@ -1110,8 +1127,12 @@ struct BqHudCard: View {
         let band = profile.titleBand?.name
         switch lvl {
         case ...4:
-            return FrameStyle(band: band ?? "Premiers pas", border: Theme.border, borderWidth: 1,
-                              outer: nil, bgTop: Theme.card, accent: Theme.accent, seal: Color.gray)
+            // Palier dédié (comme tous les autres) au lieu des couleurs génériques
+            // du thème — Theme.accent/border sont trop proches du fond bordeaux
+            // pour ressortir, contrairement à l'ambre de Beer sur son fond bleu-gris.
+            let silver = Color(red: 0.58, green: 0.64, blue: 0.72)
+            return FrameStyle(band: band ?? "Premiers pas", border: silver.opacity(0.55), borderWidth: 1.5,
+                              outer: nil, bgTop: Color(red: 0.08, green: 0.09, blue: 0.13), accent: silver, seal: silver)
         case ...8:
             return FrameStyle(band: band ?? "Apprentissage", border: Color.orange.opacity(0.55), borderWidth: 1.5,
                               outer: nil, bgTop: Color(red: 0.11, green: 0.08, blue: 0.06), accent: .orange, seal: .orange)
