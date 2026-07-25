@@ -58,6 +58,9 @@ final class AppModel: ObservableObject {
     /// Réponses admin aux feedbacks non encore vues (popup au login).
     @Published var pendingFeedbackReplies: [AdminFeedbackItem] = []
     @Published var feedbackReplyIndex: Int = 0
+    @Published var tutorialSeen = true
+    /// Ouverture auto tuto "Comment ça marche" (1ʳᵉ connexion) ou forcée par l'admin.
+    @Published var showTutorial = false
 
     var currentFeedbackReply: AdminFeedbackItem? {
         guard feedbackReplyIndex >= 0, feedbackReplyIndex < pendingFeedbackReplies.count else { return nil }
@@ -343,6 +346,7 @@ final class AppModel: ObservableObject {
             Task {
                 await refreshRpg()
                 await checkFeedbackReplies()
+                await checkTutorialSeen()
             }
         } else {
             clearRpgUiState()
@@ -363,6 +367,30 @@ final class AppModel: ObservableObject {
         } catch {
             // silencieux — pas bloquant
         }
+    }
+
+    /// Charge le flag tuto (parité PWA loadRpgSession) et déclenche l'auto-ouverture à la 1ʳᵉ connexion.
+    func checkTutorialSeen() async {
+        guard isLoggedIn else { return }
+        do {
+            let me = try await api.me()
+            let seen = me.tutorialSeen ?? true
+            tutorialSeen = seen
+            guard !seen else { return }
+            // Léger délai : laisse l'intro Weeno Quest (RPG) s'afficher en priorité si due.
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled, isLoggedIn, !tutorialSeen else { return }
+            showTutorial = true
+        } catch {
+            // silencieux — pas bloquant
+        }
+    }
+
+    /// Marque le tuto vu côté serveur (fermeture panneau, 1ʳᵉ connexion ou rejoué via bouton admin).
+    func markTutorialSeen() async {
+        guard !tutorialSeen else { return }
+        tutorialSeen = true
+        _ = try? await api.tutorialSeen()
     }
 
     func advanceFeedbackReply() {
@@ -620,6 +648,8 @@ final class AppModel: ObservableObject {
         isInvite = false
         inviteLabel = nil
         isLoggedIn = false
+        tutorialSeen = true
+        showTutorial = false
     }
 
     private var shouldRefreshPasskeySession: Bool { false }

@@ -81,6 +81,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var feedbackReplyIndex by mutableIntStateOf(0)
         private set
+    var tutorialSeen by mutableStateOf(true)
+        private set
+    /** Ouverture auto tuto "Comment ça marche" (1ʳᵉ connexion) ou forcée par l'admin. */
+    var showTutorial by mutableStateOf(false)
+        private set
 
     /** Versions portail (bannière update). */
     var latestAndroidVersion by mutableStateOf<String?>(null)
@@ -501,11 +506,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 checkFeedbackReplies()
                 refreshMobileVersions()
+                checkTutorialSeen()
             }
         } else {
             clearRpgUiState()
             pendingFeedbackReplies = emptyList()
             feedbackReplyIndex = 0
+            tutorialSeen = true
+            showTutorial = false
         }
     }
 
@@ -516,6 +524,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             pendingFeedbackReplies = items
             feedbackReplyIndex = 0
         } catch (_: Exception) {
+        }
+    }
+
+    /** Charge le flag tuto (parité PWA loadRpgSession) et déclenche l'auto-ouverture à la 1ʳᵉ connexion. */
+    suspend fun checkTutorialSeen() {
+        if (!isLoggedIn) return
+        try {
+            val me = withContext(Dispatchers.IO) { api.me() }
+            val seen = me.tutorialSeen ?: true
+            tutorialSeen = seen
+            if (!seen) {
+                // Léger délai : laisse l'intro Weeno Quest (RPG) s'afficher en priorité si due.
+                delay(1200)
+                if (isLoggedIn && !tutorialSeen) {
+                    showTutorial = true
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun consumeShowTutorialRequest() {
+        showTutorial = false
+    }
+
+    /** Marque le tuto vu côté serveur (fermeture panneau, 1ʳᵉ connexion ou rejoué via bouton admin). */
+    fun markTutorialSeen() {
+        if (tutorialSeen) return
+        tutorialSeen = true
+        viewModelScope.launch {
+            try { api.tutorialSeen() } catch (_: Exception) {}
         }
     }
 
@@ -798,6 +837,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeSheet() {
+        if (sheet == WeenoSheet.TUTORIAL) markTutorialSeen()
         sheet = null
         selectedCheckin = null
         editingCheckin = null

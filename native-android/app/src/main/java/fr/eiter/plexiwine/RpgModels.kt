@@ -180,7 +180,8 @@ data class RpgAdminPlayer(
     @SerializedName("daily_xp_today") val dailyXpToday: Int = 0,
     @SerializedName("daily_checkins_today") val dailyCheckinsToday: Int = 0,
     @SerializedName("daily_soft_capped") val dailySoftCapped: Boolean = false,
-    @SerializedName("daily_soft_cap_remaining") val dailySoftCapRemaining: Int? = null
+    @SerializedName("daily_soft_cap_remaining") val dailySoftCapRemaining: Int? = null,
+    @SerializedName("tutorial_seen") val tutorialSeen: Boolean? = null
 )
 
 fun RpgProfile.displayIcon(): String {

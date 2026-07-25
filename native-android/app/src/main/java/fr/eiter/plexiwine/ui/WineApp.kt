@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -397,6 +398,13 @@ private fun MainScreen(vm: AppViewModel) {
         }
     }
 
+    LaunchedEffect(vm.showTutorial) {
+        if (vm.showTutorial) {
+            vm.consumeShowTutorialRequest()
+            vm.openSheet(WeenoSheet.TUTORIAL)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             // Header compact — actions dans « Mon compte » (parité PWA)
@@ -574,6 +582,7 @@ private fun MainScreen(vm: AppViewModel) {
             WeenoSheet.ADMIN -> AdminSheet(vm)
             WeenoSheet.GRIMOIRE -> GrimoireSheet(vm)
             WeenoSheet.RPG_ADMIN -> RpgAdminSheet(vm)
+            WeenoSheet.TUTORIAL -> TutorialSheet(vm)
             null -> {}
         }
     }
@@ -672,6 +681,9 @@ private fun AccountMenuOverlay(
             if (vm.pendingCount > 0) {
                 AccountMenuItem("⏳ En attente (${vm.pendingCount})") { onOpen(WeenoSheet.PENDING) }
             }
+
+            AccountSection("Aide")
+            AccountMenuItem("🎓 Tutoriel") { onOpen(WeenoSheet.TUTORIAL) }
 
             AccountSection("Parler à l’admin")
             AccountMenuItem("💬 Un retour") { onFeedback() }
@@ -3051,6 +3063,118 @@ private fun PatchnotesSheet(vm: AppViewModel) {
     }
     SheetScaffold("Patch notes", onClose = { vm.closeSheet() }) {
         Text(text, color = WineColors.text, fontSize = 13.sp, modifier = Modifier.verticalScroll(rememberScrollState()))
+    }
+}
+
+private data class TutorialStep(val icon: String, val title: String, val text: String)
+
+private val weenoTutorialSteps = listOf(
+    TutorialStep(
+        icon = "🍷",
+        title = "Bienvenue sur Weeno",
+        text = "Garde une trace de toutes tes dégustations : quelques secondes suffisent pour scanner l’étiquette, noter et te souvenir de tes vins préférés."
+    ),
+    TutorialStep(
+        icon = "📷",
+        title = "1. Trouve ton vin",
+        text = "Scanne l’étiquette, ou cherche-le sur Vivino (producteur + nom). Rien trouvé ? La saisie manuelle est toujours là en secours."
+    ),
+    TutorialStep(
+        icon = "📸",
+        title = "2. Photo & lieu",
+        text = "Ajoute une photo du verre ou de la bouteille et le lieu de dégustation si tu veux — tout est optionnel, tu peux passer directement à la note."
+    ),
+    TutorialStep(
+        icon = "⭐",
+        title = "3. Note & ressenti",
+        text = "Glisse le curseur pour la note, choisis les arômes qui correspondent, ajoute un petit commentaire si l’envie te prend."
+    ),
+    TutorialStep(
+        icon = "📜",
+        title = "Retrouve tout",
+        text = "Historique, Galerie photos et recherche : tu retombes toujours sur tes dégustations passées en 2 clics."
+    ),
+    TutorialStep(
+        icon = "🍷🎁",
+        title = "À boire & idées cadeaux",
+        text = "Ta liste « À boire » garde tes envies de côté. « Idées cadeaux » suggère des vins à offrir selon vos notes à tous les deux."
+    ),
+    TutorialStep(
+        icon = "📖",
+        title = "Le Grimoire Weeno Quest",
+        text = "Chaque dégustation te fait gagner de l’XP, débloque des quêtes et des badges. Si le jeu est actif pour toi, retrouve tout ça dans le Grimoire."
+    ),
+    TutorialStep(
+        icon = "✅",
+        title = "C’est tout !",
+        text = "Tu es prêt·e. Ce tutoriel reste accessible à tout moment depuis Mon compte → Tutoriel."
+    ),
+)
+
+@Composable
+private fun TutorialSheet(vm: AppViewModel) {
+    var index by remember { mutableIntStateOf(0) }
+    val step = weenoTutorialSteps[index]
+    val isLast = index == weenoTutorialSteps.lastIndex
+
+    SheetScaffold("Comment ça marche", onClose = { vm.closeSheet() }) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(step.icon, fontSize = 52.sp)
+            Spacer(Modifier.height(14.dp))
+            Text(
+                step.title,
+                color = WineColors.accent,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                step.text,
+                color = WineColors.muted,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            weenoTutorialSteps.indices.forEach { i ->
+                Box(
+                    modifier = Modifier
+                        .height(6.dp)
+                        .width(if (i == index) 20.dp else 6.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (i == index) WineColors.accent else WineColors.border)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (index > 0) {
+                WeenoGhostButton(
+                    title = "← Précédent",
+                    onClick = { index -= 1 },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            WeenoPrimaryButton(
+                title = if (isLast) "Compris !" else "Suivant →",
+                modifier = Modifier.weight(1f)
+            ) {
+                if (isLast) vm.closeSheet() else index += 1
+            }
+        }
     }
 }
 

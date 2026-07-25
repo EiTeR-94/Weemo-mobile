@@ -297,6 +297,7 @@ struct RpgAdminPlayer: Decodable, Identifiable {
     var dailySoftCapped: Bool?
     var dailySoftCapRemaining: Int?
     var lastRpgCheckinAt: String?
+    var tutorialSeen: Bool?
     var id: String { username ?? UUID().uuidString }
 
     enum CodingKeys: String, CodingKey {
@@ -323,6 +324,7 @@ struct RpgAdminPlayer: Decodable, Identifiable {
         case dailySoftCapped = "daily_soft_capped"
         case dailySoftCapRemaining = "daily_soft_cap_remaining"
         case lastRpgCheckinAt = "last_rpg_checkin_at"
+        case tutorialSeen = "tutorial_seen"
     }
 }
 

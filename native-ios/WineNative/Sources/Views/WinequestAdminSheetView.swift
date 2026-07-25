@@ -673,6 +673,9 @@ struct WeenoQuestAdminSheetView: View {
                     let dc = p.dailySoftCap ?? 0
                     adminPill("cap \(dx)/\(dc)", .softcap)
                 }
+                if p.tutorialSeen == false {
+                    adminPill("🎓 reverra le tuto", .softcap)
+                }
             }
             Text(metaLine(p))
                 .font(.system(size: 11))
@@ -1382,6 +1385,10 @@ private struct RpgAdminPlayerDetailView: View {
                 actionBtn("−50 XP") { Task { await adjustXp(-50) } }
                 actionBtn("Reset soft-cap") { Task { await resetDaily() } }
                 actionBtn("Clear suspicion") { Task { await clearSuspicion() } }
+                actionBtn(detail?.player?.tutorialSeen == false ? "🎓 Reverra le tuto" : "🎓 Forcer tuto") {
+                    Task { await forceTutorial() }
+                }
+                .disabled(detail?.player?.tutorialSeen == false)
                 Button { confirmWipe = true } label: {
                     Text("Effacer RPG")
                         .font(.system(size: 13, weight: .bold))
@@ -1688,6 +1695,17 @@ private struct RpgAdminPlayerDetailView: View {
             app.showToast("Suspicion effacée", variant: .success, label: "Weeno Quest", durationMs: 2400)
         } catch {
             app.showToast("Échec", variant: .error, durationMs: 2600)
+        }
+    }
+
+    private func forceTutorial() async {
+        busy = true
+        defer { busy = false }
+        do {
+            applyDetail(try await app.api.adminRpgPatchPlayer(username, payload: ["tutorial_seen": false]))
+            app.showToast("\(username) reverra le tutoriel à sa prochaine connexion.", variant: .success, label: "Weeno Quest", durationMs: 2800)
+        } catch {
+            app.showToast("Échec tuto", variant: .error, durationMs: 2600)
         }
     }
 

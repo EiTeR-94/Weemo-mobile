@@ -369,6 +369,19 @@ class WineAPI private constructor(context: Context) {
         return decoded
     }
 
+    suspend fun tutorialSeen(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val (_, code) = execute(
+                requestBuilder("api/tutorial-seen")
+                    .post("{}".toRequestBody(JSON))
+                    .build()
+            )
+            code in 200..299
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** Weeno state — enabled=false si RPG off / non autorisé. */
     suspend fun rpgMe(): RpgState = withContext(Dispatchers.IO) {
         try {

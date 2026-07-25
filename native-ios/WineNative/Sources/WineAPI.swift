@@ -482,6 +482,22 @@ final class WineAPI {
         return decoded
     }
 
+    func tutorialSeen() async throws -> Bool {
+        let (data, http, _) = try await request(
+            path: "/api/tutorial-seen",
+            method: "POST",
+            body: Data("{}".utf8),
+            contentType: "application/json"
+        )
+        if http.statusCode >= 200 && http.statusCode < 300 {
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                return (obj["ok"] as? Bool) != false
+            }
+            return true
+        }
+        return false
+    }
+
     func rpgMe() async throws -> RpgState {
         let (data, http, _) = try await request(path: "/api/rpg/me", method: "GET", body: nil)
         if http.statusCode == 401 { throw WineAPIError.unauthorized }

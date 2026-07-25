@@ -8,7 +8,8 @@ data class MeResponse(
     val username: String? = null,
     val auth: Boolean = false,
     @SerializedName("is_admin") val isAdmin: Boolean = false,
-    @SerializedName("is_invite") val isInvite: Boolean = false
+    @SerializedName("is_invite") val isInvite: Boolean = false,
+    @SerializedName("tutorial_seen") val tutorialSeen: Boolean? = null
 ) {
     /** Weeno renvoie `username` ; Beer renvoyait `user`. */
     val resolvedUser: String? get() = user ?: username
@@ -289,7 +290,7 @@ enum class NetworkStatus(val label: String) {
 }
 
 enum class WeenoSheet {
-    HISTORY, GALLERY, WISHLIST, GIFTS, PENDING, DETAIL, EDIT, ADMIN, PATCHNOTES, GRIMOIRE, RPG_ADMIN
+    HISTORY, GALLERY, WISHLIST, GIFTS, PENDING, DETAIL, EDIT, ADMIN, PATCHNOTES, GRIMOIRE, RPG_ADMIN, TUTORIAL
 }
 
 data class ToastPayload(

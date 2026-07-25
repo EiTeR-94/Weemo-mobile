@@ -2655,6 +2655,42 @@ fun RpgAdminSheet(vm: AppViewModel) {
                     ) {
                         Text("Reset XP du jour", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
+
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    try {
+                                        vm.api.adminRpgPatchPlayer(name, mapOf("tutorial_seen" to false))
+                                    } catch (_: Exception) {
+                                        false
+                                    }
+                                }
+                                busy = false
+                                if (ok) {
+                                    vm.showToast(
+                                        "$name reverra le tutoriel à sa prochaine connexion.",
+                                        ToastPayload.Variant.SUCCESS,
+                                        label = "Weeno Quest"
+                                    )
+                                    selected = null
+                                    reload()
+                                } else {
+                                    vm.showToast("Échec tuto", ToastPayload.Variant.ERROR)
+                                }
+                            }
+                        },
+                        enabled = !busy && name.isNotBlank() && p.tutorialSeen != false,
+                        colors = ButtonDefaults.buttonColors(containerColor = WineColors.accent)
+                    ) {
+                        Text(
+                            if (p.tutorialSeen == false) "🎓 Reverra le tuto" else "🎓 Forcer à revoir le tuto",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             },
             confirmButton = {
