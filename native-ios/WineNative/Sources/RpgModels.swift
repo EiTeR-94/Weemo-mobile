@@ -60,7 +60,7 @@ struct RpgProfile: Decodable {
         case dailySoftCapRemaining = "daily_soft_cap_remaining"
         case classKey = "class"
         case classInfo = "class_info"
-        case beerMaster = "beer_master"
+        case beerMaster = "weeno_master"
         case titleBand = "title_band"
         case introSeen = "intro_seen"
     }
@@ -305,7 +305,7 @@ struct RpgAdminPlayer: Decodable, Identifiable {
         case streakDays = "streak_days"
         case classKey = "class"
         case classInfo = "class_info"
-        case beerMaster = "beer_master"
+        case beerMaster = "weeno_master"
         case isAdmin = "is_admin"
         case isInvite = "is_invite"
         case badgeCount = "badge_count"

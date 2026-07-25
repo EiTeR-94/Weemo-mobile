@@ -35,7 +35,7 @@ data class RpgProfile(
     @SerializedName("daily_soft_cap_remaining") val dailySoftCapRemaining: Int? = null,
     @SerializedName("class") val classKey: String? = null,
     @SerializedName("class_info") val classInfo: RpgClassInfo? = null,
-    @SerializedName("beer_master") val beerMaster: Boolean = false,
+    @SerializedName("weeno_master") val beerMaster: Boolean = false,
     val prestige: RpgPrestige? = null,
     @SerializedName("title_band") val titleBand: RpgTitleBand? = null,
     @SerializedName("intro_seen") val introSeen: Boolean = false
@@ -167,7 +167,7 @@ data class RpgAdminPlayer(
     val title: String? = null,
     @SerializedName("streak_days") val streakDays: Int = 0,
     @SerializedName("class") val classKey: String? = null,
-    @SerializedName("beer_master") val beerMaster: Boolean = false,
+    @SerializedName("weeno_master") val beerMaster: Boolean = false,
     @SerializedName("is_admin") val isAdmin: Boolean = false,
     @SerializedName("is_invite") val isInvite: Boolean = false,
     val checkins: Int = 0,
