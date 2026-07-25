@@ -106,7 +106,14 @@ struct WineWizardView: View {
             }
         }
         .fullScreenCover(isPresented: $showScanCamera) {
-            CameraPicker { image in Task { await processScanPhoto(image) } }
+            LiveLabelScanner(
+                onImage: { image in
+                    showScanCamera = false
+                    Task { await processScanPhoto(image) }
+                },
+                onCancel: { showScanCamera = false }
+            )
+            .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showTastingCamera) {
             CameraPicker { image in Task { await processTastingPhoto(image) } }

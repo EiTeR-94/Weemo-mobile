@@ -1090,6 +1090,7 @@ private fun WeenoWizard(vm: AppViewModel) {
     var duplicateDetail by remember { mutableStateOf("") }
     var pendingCapture by remember { mutableStateOf<File?>(null) }
     var captureMode by remember { mutableStateOf("photo") } // photo | scan
+    var showLabelAutoScanner by remember { mutableStateOf(false) }
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -1168,16 +1169,8 @@ private fun WeenoWizard(vm: AppViewModel) {
         vm.wizardStep = 1
     }
 
-    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val f = pendingCapture
-        pendingCapture = null
-        if (!ok || f == null) return@rememberLauncherForActivityResult
-        if (captureMode == "photo") {
-            photoFile = f
-            vm.showToast("Photo prête ✓", ToastPayload.Variant.SUCCESS)
-            return@rememberLauncherForActivityResult
-        }
-        // Mode scan = POST /api/label-scan (backend serveur Vivino-vision ou Gemini + candidats Vivino)
+    // Partagé entre : photo caméra système (mode scan) et LabelAutoScanner (capture auto OCR).
+    fun runLabelAnalysis(f: File) {
         labelPhotoFile = f
         scope.launch {
             busy = true
@@ -1228,6 +1221,19 @@ private fun WeenoWizard(vm: AppViewModel) {
                 busy = false
             }
         }
+    }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = pendingCapture
+        pendingCapture = null
+        if (!ok || f == null) return@rememberLauncherForActivityResult
+        if (captureMode == "photo") {
+            photoFile = f
+            vm.showToast("Photo prête ✓", ToastPayload.Variant.SUCCESS)
+            return@rememberLauncherForActivityResult
+        }
+        // Mode scan = POST /api/label-scan (backend serveur Vivino-vision ou Gemini + candidats Vivino)
+        runLabelAnalysis(f)
     }
 
     fun launchCamera(mode: String) {
@@ -1354,7 +1360,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                             .clip(RoundedCornerShape(16.dp))
                             .background(WineColors.photoBg)
                             .border(1.dp, WineColors.border, RoundedCornerShape(16.dp))
-                            .clickable { ensureCamera("scan") },
+                            .clickable { showLabelAutoScanner = true },
                         contentAlignment = Alignment.Center
                     ) {
                         if (labelPhotoFile != null) {
@@ -1419,6 +1425,24 @@ private fun WeenoWizard(vm: AppViewModel) {
                                 }
                             }
                         }
+                    }
+                }
+
+                if (showLabelAutoScanner) {
+                    Dialog(
+                        onDismissRequest = { showLabelAutoScanner = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        LabelAutoScanner(
+                            onCapture = { bytes ->
+                                showLabelAutoScanner = false
+                                val dir = File(context.cacheDir, "wine").apply { mkdirs() }
+                                val f = File(dir, "scan_auto_${System.currentTimeMillis()}.jpg")
+                                f.writeBytes(bytes)
+                                runLabelAnalysis(f)
+                            },
+                            onCancel = { showLabelAutoScanner = false }
+                        )
                     }
                 }
 
