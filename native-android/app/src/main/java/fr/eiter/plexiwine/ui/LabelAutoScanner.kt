@@ -99,6 +99,13 @@ fun LabelAutoScanner(
     val analyzeEvery = 3
     val minChars = 10
     val minLines = 2
+    // Une page de livre/document a beaucoup plus de texte qu'une étiquette de vin dans
+    // le cadre — filtre les faux positifs "texte présent mais pas une étiquette".
+    val maxChars = 200
+    val maxLines = 10
+    // Une étiquette a toujours une ligne "titre" (nom du vin/producteur) nettement plus
+    // grande que le reste ; une page de texte uniforme n'en a aucune.
+    val minHeadlineHeightRatio = 0.045f
 
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -237,13 +244,20 @@ fun LabelAutoScanner(
                             val image = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
                             recognizer.process(image)
                                 .addOnSuccessListener { result ->
-                                    val lines = result.textBlocks.flatMap { b ->
-                                        b.lines.map { it.text.trim() }
-                                    }.filter { it.isNotEmpty() }
-                                    val text = lines.joinToString("\n")
+                                    val lines = result.textBlocks.flatMap { it.lines }
+                                        .filter { it.text.isNotBlank() }
+                                    val text = lines.joinToString("\n") { it.text.trim() }
                                     val chars = text.count { !it.isWhitespace() }
-                                    // "Bon" = assez de texte (étiquette) — pas d’égalité stricte de sig
-                                    val good = chars >= minChars && lines.size >= minLines
+                                    val rot = proxy.imageInfo.rotationDegrees
+                                    val frameH = if (rot == 90 || rot == 270) media.width else media.height
+                                    val maxLineHeightRatio = lines
+                                        .mapNotNull { it.boundingBox?.height()?.toFloat() }
+                                        .maxOrNull()?.let { it / frameH.toFloat() } ?: 0f
+                                    val hasHeadline = maxLineHeightRatio >= minHeadlineHeightRatio
+                                    // "Bon" = assez de texte mais pas trop (étiquette, pas une page de
+                                    // livre) + une ligne "titre" nettement plus grande que le reste
+                                    val good = chars >= minChars && chars <= maxChars &&
+                                        lines.size >= minLines && lines.size <= maxLines && hasHeadline
                                     previewView.post {
                                         if (fired.get()) return@post
                                         if (good) {

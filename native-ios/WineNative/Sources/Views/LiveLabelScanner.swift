@@ -42,6 +42,13 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private let analyzeEveryN = 3
     private let minChars = 10
     private let minLines = 2
+    /// Une page de livre/document a beaucoup plus de texte qu'une étiquette de vin
+    /// dans le cadre — filtre les faux positifs "texte présent mais pas une étiquette".
+    private let maxChars = 200
+    private let maxLines = 10
+    /// Une étiquette a toujours une ligne "titre" (nom du vin/producteur) nettement
+    /// plus grande que le reste ; une page de texte uniforme n'en a aucune.
+    private let minHeadlineHeight: CGFloat = 0.045
     private var analyzing = false
 
     override func viewDidLoad() {
@@ -207,7 +214,10 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
             let lines: [String] = observations.compactMap { $0.topCandidates(1).first?.string }
             let text = lines.joined(separator: "\n")
             let charCount = text.filter { !$0.isWhitespace }.count
-            let good = charCount >= self.minChars && lines.count >= self.minLines
+            let hasHeadline = (observations.map { $0.boundingBox.height }.max() ?? 0) >= self.minHeadlineHeight
+            let good = charCount >= self.minChars && charCount <= self.maxChars
+                && lines.count >= self.minLines && lines.count <= self.maxLines
+                && hasHeadline
 
             DispatchQueue.main.async {
                 if good {
