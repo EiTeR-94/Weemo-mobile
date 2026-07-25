@@ -39,7 +39,9 @@ object ServerSettings {
             }
             alt.distinct()
         } else {
-            listOf(LAN_API_BASE, API_BASE_STRING)
+            // LAN maison, puis domaine WAN, puis IPv4 directe + SNI (fallback si l'AAAA
+            // Freebox casse le TLS hors LAN — hotspot/VPN/4G — jamais tenté avant ce fix).
+            listOf(LAN_API_BASE, API_BASE_STRING, WAN_IPV4_API_BASE)
         }
 
     val inviteCandidateURLs: List<String>

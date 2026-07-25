@@ -47,7 +47,9 @@ enum ServerSettings {
         if preferWanOnly {
             return [apiBaseString, wanIPv4ApiBaseString]
         }
-        return [lanApiBaseString, apiBaseString]
+        // LAN maison, puis domaine WAN, puis IPv4 directe + SNI (fallback si l'AAAA
+        // Freebox casse le TLS hors LAN — hotspot/VPN mal détecté comme "WiFi local").
+        return [lanApiBaseString, apiBaseString, wanIPv4ApiBaseString]
     }
 
     static var inviteCandidateURLs: [String] {
