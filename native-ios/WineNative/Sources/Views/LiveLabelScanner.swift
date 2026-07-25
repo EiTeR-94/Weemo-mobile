@@ -37,8 +37,10 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private var stableCount = 0
     private var capturing = false
     private var fired = false
-    /// Frames "bon texte" consécutives (pas d’égalité stricte OCR → bloquait à 1/7)
-    private let minStableFrames = 4
+    /// Assez de temps pour cadrer avant capture (à ~3-4 frames analysées/sec avec
+    /// analyzeEveryN=3, 7 frames stables ≈ 2s — contre 4 ≈ 1-1,2s, beaucoup trop court,
+    /// la capture partait avant que l'utilisateur ait fini de cadrer/stabiliser).
+    private let minStableFrames = 7
     private let analyzeEveryN = 3
     private let minChars = 10
     private let minLines = 2
@@ -47,8 +49,9 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     private let maxChars = 200
     private let maxLines = 10
     /// Une étiquette a toujours une ligne "titre" (nom du vin/producteur) nettement
-    /// plus grande que le reste ; une page de texte uniforme n'en a aucune.
-    private let minHeadlineHeight: CGFloat = 0.045
+    /// plus grande que le reste ; une page de texte uniforme n'en a aucune. Relevé un
+    /// peu pour exiger que l'étiquette remplisse vraiment le cadre.
+    private let minHeadlineHeight: CGFloat = 0.06
     private var analyzing = false
 
     override func viewDidLoad() {

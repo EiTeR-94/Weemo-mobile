@@ -94,8 +94,9 @@ fun LabelAutoScanner(
     val guideRectPx = remember { AtomicReference(floatArrayOf(0f, 0f, 1f, 1f)) } // L,T,R,B
     val previewSizePx = remember { AtomicReference(intArrayOf(0, 0)) } // W,H
 
-    // Moins strict qu’avant : l’OCR change de sig à chaque frame → exact match = bloqué à 1/7
-    val minStable = 4
+    // Assez de temps pour cadrer avant capture (à ~3-4 frames analysées/sec avec
+    // analyzeEvery=3, 7 frames stables ≈ 2s — contre 4 ≈ 1-1,2s, beaucoup trop court).
+    val minStable = 7
     val analyzeEvery = 3
     val minChars = 10
     val minLines = 2
@@ -104,8 +105,12 @@ fun LabelAutoScanner(
     val maxChars = 200
     val maxLines = 10
     // Une étiquette a toujours une ligne "titre" (nom du vin/producteur) nettement plus
-    // grande que le reste ; une page de texte uniforme n'en a aucune.
-    val minHeadlineHeightRatio = 0.045f
+    // grande que le reste ; une page de texte uniforme n'en a aucune. Relevé un peu pour
+    // exiger que l'étiquette remplisse vraiment le cadre (pas juste visible au loin).
+    val minHeadlineHeightRatio = 0.06f
+    // Marge de tolérance autour du cadre guide pour la position de la ligne "titre"
+    // (fraction de la largeur/hauteur du cadre) — évite de rejeter un cadrage limite.
+    val guideMargin = 0.12f
 
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -249,15 +254,37 @@ fun LabelAutoScanner(
                                     val text = lines.joinToString("\n") { it.text.trim() }
                                     val chars = text.count { !it.isWhitespace() }
                                     val rot = proxy.imageInfo.rotationDegrees
+                                    val frameW = if (rot == 90 || rot == 270) media.height else media.width
                                     val frameH = if (rot == 90 || rot == 270) media.width else media.height
-                                    val maxLineHeightRatio = lines
-                                        .mapNotNull { it.boundingBox?.height()?.toFloat() }
-                                        .maxOrNull()?.let { it / frameH.toFloat() } ?: 0f
+                                    // Ligne "titre" = la plus grande (nom du vin/producteur en général)
+                                    val headline = lines.maxByOrNull { it.boundingBox?.height() ?: 0 }
+                                    val maxLineHeightRatio = headline?.boundingBox?.height()
+                                        ?.toFloat()?.let { it / frameH.toFloat() } ?: 0f
                                     val hasHeadline = maxLineHeightRatio >= minHeadlineHeightRatio
+                                    // La ligne "titre" doit être dans le cadre guide (pas ailleurs dans
+                                    // l'image) — sans ça, du texte en arrière-plan hors cadre pouvait
+                                    // déclencher la capture, d'où les mauvais matchs Vivino ensuite.
+                                    val (vw, vh) = previewSizePx.get()
+                                    val g = guideRectPx.get()
+                                    val headlineInGuide = headline?.boundingBox?.let { box ->
+                                        if (vw <= 0 || vh <= 0 || frameW <= 0 || frameH <= 0) return@let true
+                                        val norm = ImageUtils.fillCenterViewRectToImageNorm(
+                                            viewW = vw, viewH = vh, imageW = frameW, imageH = frameH,
+                                            rectL = g[0], rectT = g[1], rectR = g[2], rectB = g[3]
+                                        )
+                                        val cx = box.centerX().toFloat() / frameW
+                                        val cy = box.centerY().toFloat() / frameH
+                                        val mx = norm[2] * guideMargin
+                                        val my = norm[3] * guideMargin
+                                        cx in (norm[0] - mx)..(norm[0] + norm[2] + mx) &&
+                                            cy in (norm[1] - my)..(norm[1] + norm[3] + my)
+                                    } ?: false
                                     // "Bon" = assez de texte mais pas trop (étiquette, pas une page de
-                                    // livre) + une ligne "titre" nettement plus grande que le reste
+                                    // livre) + une ligne "titre" nettement plus grande que le reste,
+                                    // et cette ligne titre doit être dans le cadre guide
                                     val good = chars >= minChars && chars <= maxChars &&
-                                        lines.size >= minLines && lines.size <= maxLines && hasHeadline
+                                        lines.size >= minLines && lines.size <= maxLines &&
+                                        hasHeadline && headlineInGuide
                                     previewView.post {
                                         if (fired.get()) return@post
                                         if (good) {
