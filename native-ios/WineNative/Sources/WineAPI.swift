@@ -1102,12 +1102,19 @@ final class WineAPI {
             if http.statusCode == 401 { NotificationCenter.default.post(name: .beerAuthExpired, object: nil) }
             throw WineAPIError.unauthorized
         }
+        // Backend renvoie tous les comptes, invités inclus (même logique que les
+        // invités qui apparaissent aussi dans /api/admin/users pour les stats) —
+        // l'onglet Comptes doit filtrer les invités (parité webapp admin.js:
+        // `!username.startsWith("invite_")`), ils ont leur propre onglet Invités.
+        func withoutInvites(_ list: [AdminUser]) -> [AdminUser] {
+            list.filter { !$0.username.lowercased().hasPrefix("invite_") }
+        }
         // Backend renvoie un array (parité Beer). Ancien format {users:[…]} encore accepté.
         if let list = try? JSONDecoder().decode([AdminUser].self, from: data) {
-            return list
+            return withoutInvites(list)
         }
         if let wrapped = try? JSONDecoder().decode(AdminUsersWrap.self, from: data) {
-            return wrapped.users
+            return withoutInvites(wrapped.users)
         }
         return []
     }

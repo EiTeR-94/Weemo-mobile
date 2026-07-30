@@ -1299,25 +1299,32 @@ class WineAPI private constructor(context: Context) {
     // ── Admin comptes / invites / outils (parité iOS) ────────────────────────
 
     suspend fun adminUsers(): List<AdminUser> = withContext(Dispatchers.IO) {
+        // Backend renvoie tous les comptes, invités inclus — l'onglet Comptes doit
+        // les filtrer (parité webapp admin.js: `!username.startsWith("invite_")`),
+        // ils ont leur propre onglet Invités.
+        rawAdminUsers().filter { !it.username.lowercase().startsWith("invite_") }
+    }
+
+    private suspend fun rawAdminUsers(): List<AdminUser> {
         val (body, code) = execute(requestBuilder("api/admin/users").get().build())
-        if (code !in 200..299) return@withContext emptyList()
+        if (code !in 200..299) return emptyList()
         // Array (parité Beer) ou ancien wrapper {users:[…]}
         try {
             val type = object : TypeToken<List<AdminUser>>() {}.type
-            gson.fromJson<List<AdminUser>>(body, type)?.takeIf { true }?.let { list ->
+            gson.fromJson<List<AdminUser>>(body, type)?.let { list ->
                 // Si le JSON est un objet, Gson renvoie null ou crash — try wrap
-                if (body.trimStart().startsWith("[")) return@withContext list
+                if (body.trimStart().startsWith("[")) return list
             }
         } catch (_: Exception) {
         }
         try {
             val wrap = gson.fromJson(body, AdminUsersWrap::class.java)
-            if (wrap?.users != null) return@withContext wrap.users
+            if (wrap?.users != null) return wrap.users
         } catch (_: Exception) {
         }
-        try {
+        return try {
             val type = object : TypeToken<List<AdminUser>>() {}.type
-            return@withContext gson.fromJson<List<AdminUser>>(body, type) ?: emptyList()
+            gson.fromJson<List<AdminUser>>(body, type) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
