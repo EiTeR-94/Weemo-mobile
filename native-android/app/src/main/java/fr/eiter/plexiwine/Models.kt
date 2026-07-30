@@ -113,6 +113,7 @@ data class CheckinItem(
     @SerializedName("created_at") val createdAt: String? = null,
     @SerializedName("photo_url") val photoURL: String? = null,
     @SerializedName("photo_path") val photoPath: String? = null,
+    @SerializedName("label_photo_path") val labelPhotoPath: String? = null,
     val flavors: List<String>? = null,
     val hops: List<String>? = null,
     @SerializedName("hidden_from_partner") val hiddenFromPartner: Boolean? = null,
@@ -124,8 +125,9 @@ data class CheckinItem(
     /** Autres utilisateurs ayant aussi dégusté ce vin (calculé serveur). */
     @SerializedName("also_tasted_by") val alsoTastedBy: List<String>? = null
 ) {
-    /** Weeno stocke photo_path (pas photo_url Beer). */
-    val resolvedPhoto: String? get() = photoURL ?: photoPath
+    /** Weeno stocke photo_path (pas photo_url Beer). Fallback photo étiquette si
+     * pas de photo souvenir — parité webapp (checkin-detail.js/history.js/drawers.js). */
+    val resolvedPhoto: String? get() = photoURL ?: photoPath ?: labelPhotoPath
 }
 
 data class HistoryStats(
