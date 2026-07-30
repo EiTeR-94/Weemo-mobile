@@ -108,11 +108,17 @@ enum ServerSettings {
         if path.hasPrefix("http") { return URL(string: path) }
         let origin = serverOrigin(from: base)
         let p = path.hasPrefix("/") ? path : "/\(path)"
-        if p.hasPrefix("/wine/") || p.hasPrefix("/wine/") || p.hasPrefix("/static/") || p.hasPrefix("/photos/") {
+        if p.hasPrefix("/wine/") || p.hasPrefix("/static/") || p.hasPrefix("/photos/") {
             return URL(string: origin + p)
         }
+        // Filename brut (photo_path/label_photo_path renvoyés tels quels par le
+        // serveur, ex. "abc123.jpg") — toujours servi sous /photos/, jamais à la
+        // racine. Sans ce préfixe : 404 systématique → épuise tout le retry
+        // LAN+WAN (jusqu'à 6 tentatives avec backoff) avant d'abandonner —
+        // cause du "photos extrêmement longues à charger".
         let root = normalizeInput(base.absoluteString)
-        return URL(string: root + (p.hasPrefix("/") ? String(p.dropFirst()) : p))
+        let filename = p.hasPrefix("/") ? String(p.dropFirst()) : p
+        return URL(string: root + "photos/" + filename)
     }
 }
 

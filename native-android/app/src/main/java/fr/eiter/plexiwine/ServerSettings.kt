@@ -120,21 +120,20 @@ object ServerSettings {
         val origin = serverOrigin(base)
         val p = if (path.startsWith("/")) path else "/$path"
         // server serves photos under /wine/photos/, /wine/photos/ or absolute /photos/
-        return if (
-            p.startsWith("/wine/") ||
+        if (
             p.startsWith("/wine/") ||
             p.startsWith("/static/") ||
             p.startsWith("/photos/")
         ) {
-            origin + p
-        } else if (p.startsWith("/")) {
-            // relative to beer root often "photos/xxx"
-            val beerRoot = normalizeInput(base).trimEnd('/')
-            "$beerRoot$p"
-        } else {
-            val beerRoot = normalizeInput(base).trimEnd('/')
-            "$beerRoot/$path"
+            return origin + p
         }
+        // Filename brut (photo_path/label_photo_path renvoyés tels quels par le
+        // serveur, ex. "abc123.jpg") — toujours servi sous /photos/, jamais à la
+        // racine. Sans ce préfixe : 404 systématique → épuise tout le retry
+        // LAN+WAN avant d'abandonner — cause du "photos extrêmement longues à charger".
+        val beerRoot = normalizeInput(base).trimEnd('/')
+        val filename = p.trimStart('/')
+        return "$beerRoot/photos/$filename"
     }
 
     /** Gift photo_path is often a bare filename or path — match iOS lastPathComponent handling. */
