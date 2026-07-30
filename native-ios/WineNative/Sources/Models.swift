@@ -178,6 +178,7 @@ struct CheckinItem: Identifiable, Codable, Hashable {
     let createdAt: String?
     let photoURL: String?
     let photoPath: String?
+    let labelPhotoPath: String?
     let flavors: [String]?
     let hops: [String]?
     let hiddenFromPartner: Bool?
@@ -196,13 +197,16 @@ struct CheckinItem: Identifiable, Codable, Hashable {
         case createdAt = "created_at"
         case photoURL = "photo_url"
         case photoPath = "photo_path"
+        case labelPhotoPath = "label_photo_path"
         case hiddenFromPartner = "hidden_from_partner"
         case vivinoBid = "vivino_id"
         case alsoTastedBy = "also_tasted_by"
     }
 
-    /// Weeno stocke `photo_path` (pas `photo_url` Beer).
-    var resolvedPhoto: String? { photoURL ?? photoPath }
+    /// Weeno stocke `photo_path` (pas `photo_url` Beer). Fallback photo étiquette
+    /// si pas de photo souvenir — parité webapp (checkin-detail.js, history.js,
+    /// drawers.js: `item.photo_path || item.label_photo_path`).
+    var resolvedPhoto: String? { photoURL ?? photoPath ?? labelPhotoPath }
 }
 
 struct HistoryStats: Codable {
