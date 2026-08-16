@@ -1,15 +1,15 @@
 {
-  "ios": "0.5.8",
-  "ios_build": "49",
-  "ios_updated_at": "16-08-2026 11:18",
+  "ios": "0.5.9",
+  "ios_build": "50",
+  "ios_updated_at": "16-08-2026 11:26",
   "android": "0.5.7",
   "android_build": "40",
   "android_updated_at": "16-08-2026 11:16",
   "webapp": "0.4.0",
   "webapp_updated_at": "16-08-2026 11:00",
-  "manifest_generated_at": "16-08-2026 11:19",
-  "updated_at": "16-08-2026 11:19",
-  "updated_at_iso": "2026-08-16T09:19:32Z",
+  "manifest_generated_at": "16-08-2026 11:26",
+  "updated_at": "16-08-2026 11:26",
+  "updated_at_iso": "2026-08-16T09:26:28Z",
   "portal_url": "https://eiter.freeboxos.fr/mobile/wine/",
   "note": "L’IPA et l’APK ont des cycles de maj séparés. Compare la version de ta plateforme."
 }
