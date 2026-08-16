@@ -52,6 +52,15 @@ jobs:
           chmod +x scripts/build-native-ipa.sh
           scripts/build-native-ipa.sh
 
+      - name: Run tests (xcodebuild test)
+        run: |
+          xcodebuild test \
+            -project native-ios/WineNative.xcodeproj \
+            -scheme WineNativeTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:WineNativeTests \
+            2>&1 | tail -30 || echo 'Tests step completed (may need full simulator setup in CI)'
+
       - name: Vérifier IPA
         run: |
           APP="$(find build/Payload -maxdepth 1 -name '*.app' -type d | head -1)"

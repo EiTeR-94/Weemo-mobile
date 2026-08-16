@@ -8,24 +8,24 @@ platform :ios do
   lane :build_ipa do
     setup_ci(force: true)
 
-    project = "native-ios/BeerNative.xcodeproj"
+    project = "native-ios/WineNative.xcodeproj"
 
     update_code_signing_settings(
       use_automatic_signing: false,
       path: project,
-      targets: ["BeerNative"],
-      bundle_identifier: "fr.eiter.plexibeer",
+      targets: ["WineNative"],
+      bundle_identifier: "fr.eiter.plexiwine",
       code_sign_identity: "",
       team_id: ""
     )
 
     build_app(
       project: project,
-      scheme: "BeerNative",
+      scheme: "WineNative",
       configuration: "Release",
       export_method: "development",
       output_directory: "build",
-      output_name: "PlexiBeer",
+      output_name: "PlexiWine",
       clean: true,
       skip_codesigning: true,
       skip_package_ipa: false,
