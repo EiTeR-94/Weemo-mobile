@@ -111,6 +111,20 @@ fun LabelAutoScanner(
     // Marge de tolérance autour du cadre guide pour la position de la ligne "titre"
     // (fraction de la largeur/hauteur du cadre) — évite de rejeter un cadrage limite.
     val guideMargin = 0.12f
+    // Mots-clés très caractéristiques d'un produit qui N'EST PAS du vin (compléments
+    // alimentaires, cosmétiques, nourriture emballée) — un pot de créatine a le même
+    // profil "headline + texte structuré" qu'une étiquette de vin pour les heuristiques
+    // ci-dessus, donc la forme seule ne suffit pas à les distinguer. La mention légale
+    // obligatoire (tableau nutritionnel, "complément alimentaire"…) si.
+    val nonWineKeywords = remember {
+        listOf(
+            "COMPLEMENT ALIMENTAIRE", "COMPLÉMENT ALIMENTAIRE", "DIETARY SUPPLEMENT",
+            "SUPPLEMENT FACTS", "CREATINE", "CRÉATINE", "MONOHYDRATE", "WHEY",
+            "VALEUR ENERGETIQUE", "VALEUR ÉNERGÉTIQUE", "NUTRITION FACTS",
+            "APPORT JOURNALIER", "PROTEIN POWDER", "SHAMPOOING", "GEL DOUCHE",
+            "CREME HYDRATANTE", "CRÈME HYDRATANTE", "DENTIFRICE"
+        )
+    }
 
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -279,15 +293,24 @@ fun LabelAutoScanner(
                                         cx in (norm[0] - mx)..(norm[0] + norm[2] + mx) &&
                                             cy in (norm[1] - my)..(norm[1] + norm[3] + my)
                                     } ?: false
+                                    // Rejet dur si le texte contient un marqueur typique d'un produit
+                                    // non-vin (complément alimentaire, cosmétique…) — pas de soft reset
+                                    // ici, on ne veut clairement pas déclencher dessus.
+                                    val upperText = text.uppercase()
+                                    val looksNonWine = nonWineKeywords.any { upperText.contains(it) }
                                     // "Bon" = assez de texte mais pas trop (étiquette, pas une page de
                                     // livre) + une ligne "titre" nettement plus grande que le reste,
                                     // et cette ligne titre doit être dans le cadre guide
-                                    val good = chars >= minChars && chars <= maxChars &&
+                                    val good = !looksNonWine && chars >= minChars && chars <= maxChars &&
                                         lines.size >= minLines && lines.size <= maxLines &&
                                         hasHeadline && headlineInGuide
                                     previewView.post {
                                         if (fired.get()) return@post
-                                        if (good) {
+                                        if (looksNonWine) {
+                                            stable = 0
+                                            status = "Ça ne ressemble pas à une étiquette de vin"
+                                            borderOk = false
+                                        } else if (good) {
                                             val next = (stable + 1).coerceAtMost(minStable)
                                             stable = next
                                             if (next >= minStable) {

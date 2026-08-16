@@ -1547,12 +1547,6 @@ final class WineAPI {
         _ = try? await request(path: "/api/label-memory/reject", method: "POST", body: body, contentType: "application/json")
     }
 
-    func addHop(_ name: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["name": name])
-        let (_, http, _) = try await request(path: "/api/hops", method: "POST", body: body, contentType: "application/json")
-        if http.statusCode >= 400 { throw WineAPIError.server("Houblon non ajouté") }
-    }
-
     func adminReferentials() async throws -> ReferentialsResponse {
         let (data, http, _) = try await request(path: "/api/admin/referentials", method: "GET", body: nil)
         if http.statusCode == 401 || http.statusCode == 403 {

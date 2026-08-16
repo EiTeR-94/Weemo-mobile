@@ -35,6 +35,16 @@ struct WineWizardView: View {
     @State private var customStyle = ""
 
     @State private var showScanCamera = false
+    // Plafond de relances auto du scan live sur non-match (parité webapp LIVE_SCAN_MAX_ATTEMPTS) —
+    // reste sous le rate-limit serveur partagé WINE_VIVINO_SCAN_RATE_MAX au lieu de boucler à l'infini.
+    @State private var scanAttempt = 0
+    private let maxScanAttempts = 6
+    // true seulement quand la réouverture de la caméra vient d'une relance interne (pas un tap utilisateur) —
+    // sert à ne pas remettre scanAttempt à 0 dans processScanPhoto() lors de cette réouverture.
+    @State private var isScanRetryReopen = false
+    // Photo en attente d'un scan réseau qui a échoué hors-ligne — relancée auto au retour du réseau
+    // (parité webapp scheduleScanOnlineRetry), voir .onChange(of: app.networkStatus) plus bas.
+    @State private var scanNetworkRetryImage: UIImage?
     @State private var showTastingCamera = false
     @State private var photoData: Data?
     @State private var photoPreview: UIImage?
@@ -115,11 +125,24 @@ struct WineWizardView: View {
             LiveLabelScanner(
                 onImage: { image in
                     showScanCamera = false
-                    Task { await processScanPhoto(image) }
+                    let retry = isScanRetryReopen
+                    isScanRetryReopen = false
+                    Task { await processScanPhoto(image, isRetry: retry) }
                 },
-                onCancel: { showScanCamera = false }
+                onCancel: {
+                    showScanCamera = false
+                    isScanRetryReopen = false
+                }
             )
             .ignoresSafeArea()
+        }
+        .onChange(of: app.networkStatus) { status in
+            // Relance auto du scan au retour réseau (parité webapp scheduleScanOnlineRetry) —
+            // même photo, sans repasser par la caméra.
+            guard status == .online, let image = scanNetworkRetryImage else { return }
+            scanNetworkRetryImage = nil
+            app.showToast("Réseau de retour — relance du scan…", variant: .success)
+            Task { await processScanPhoto(image, isRetry: true) }
         }
         .fullScreenCover(isPresented: $showTastingCamera) {
             CameraPicker { image in Task { await processTastingPhoto(image) } }
@@ -213,7 +236,11 @@ struct WineWizardView: View {
                 Text("Scan d’étiquette")
                     .font(.system(size: Theme.Font.tagTitle, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Button { showScanCamera = true } label: {
+                Button {
+                    scanAttempt = 0
+                    isScanRetryReopen = false
+                    showScanCamera = true
+                } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Theme.photoBg)
@@ -609,8 +636,12 @@ struct WineWizardView: View {
         return false
     }
 
-    private func processScanPhoto(_ image: UIImage, skipMemory: Bool = false) async {
+    private func processScanPhoto(_ image: UIImage, skipMemory: Bool = false, isRetry: Bool = false) async {
         labelPreview = image
+        if !isRetry {
+            scanAttempt = 0
+            scanNetworkRetryImage = nil
+        }
         if !skipMemory {
             labelMemoryPrint = nil
             labelMemoryHitId = nil
@@ -655,18 +686,37 @@ struct WineWizardView: View {
                     showManual = true
                 } else {
                     // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
-                    // Vivino, on ne bloque pas sur un écran d'échec : on relance juste le scan live.
-                    scanStatus = scan.hint ?? "Rien reconnu — continue de scanner"
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                    showScanCamera = true
+                    // Vivino, on ne bloque pas sur un écran d'échec : on relance le scan live,
+                    // plafonné comme la webapp (LIVE_SCAN_MAX_ATTEMPTS) pour rester sous le
+                    // rate-limit serveur partagé WINE_VIVINO_SCAN_RATE_MAX au lieu de boucler à l'infini.
+                    scanAttempt += 1
+                    if scanAttempt < maxScanAttempts {
+                        scanStatus = "\(scan.hint ?? "Rien reconnu") — nouvelle tentative (\(scanAttempt)/\(maxScanAttempts))…"
+                        isScanRetryReopen = true
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        showScanCamera = true
+                    } else {
+                        showManual = true
+                        scanStatus = "Étiquette non reconnue après \(maxScanAttempts) tentatives — cherche sur Vivino ou saisis à la main"
+                        app.showToast("Scan sans résultat", variant: .warn)
+                    }
                 }
             }
         } catch let err {
-            let m = err.localizedDescription
-            if m.contains("429") || m.lowercased().contains("quota") {
-                scanStatus = "Scan saturé (limite API) — réessaie plus tard"
+            if app.networkStatus != .online {
+                // Hors ligne : la photo est gardée et le scan est relancé auto au retour
+                // réseau (parité webapp scheduleScanOnlineRetry) — pas de retry caméra ici,
+                // le problème est le réseau, pas la reconnaissance.
+                scanNetworkRetryImage = image
+                showManual = true
+                scanStatus = "Hors ligne — relance auto du scan au retour du réseau"
             } else {
-                scanStatus = "Erreur scan : \(m.prefix(140))"
+                let m = err.localizedDescription
+                if m.contains("429") || m.lowercased().contains("quota") {
+                    scanStatus = "Scan saturé (limite API) — réessaie plus tard"
+                } else {
+                    scanStatus = "Erreur scan : \(m.prefix(140))"
+                }
             }
         }
     }
@@ -906,6 +956,9 @@ struct WineWizardView: View {
         product = nil
         scannedCode = ""
         labelPreview = nil
+        scanAttempt = 0
+        isScanRetryReopen = false
+        scanNetworkRetryImage = nil
         vivinoQuery = ""
         vivinoProducer = ""
         vivinoVintage = ""

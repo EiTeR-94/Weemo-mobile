@@ -1104,6 +1104,16 @@ private fun WeenoWizard(vm: AppViewModel) {
     var pendingCapture by remember { mutableStateOf<File?>(null) }
     var captureMode by remember { mutableStateOf("photo") } // photo | scan
     var showLabelAutoScanner by remember { mutableStateOf(false) }
+    // Plafond de relances auto du scan live sur non-match (parité webapp LIVE_SCAN_MAX_ATTEMPTS) —
+    // reste sous le rate-limit serveur partagé WINE_VIVINO_SCAN_RATE_MAX au lieu de boucler à l'infini.
+    var scanAttempt by remember { mutableStateOf(0) }
+    val maxScanAttempts = 6
+    // true seulement quand la réouverture de la caméra vient d'une relance interne (pas un tap utilisateur) —
+    // sert à ne pas remettre scanAttempt à 0 dans runLabelAnalysis() lors de cette réouverture.
+    var isScanRetryReopen by remember { mutableStateOf(false) }
+    // Photo en attente d'un scan réseau qui a échoué hors-ligne — relancée auto au retour du réseau
+    // (parité webapp scheduleScanOnlineRetry), voir LaunchedEffect(vm.networkStatus) plus bas.
+    var scanNetworkRetryFile by remember { mutableStateOf<File?>(null) }
     // Mémoire étiquette (dHash/aHash → vin déjà connu, court-circuite Vivino/IA au rescan).
     var labelMemoryPrint by remember { mutableStateOf<Pair<String, String>?>(null) }
     var labelMemoryHitId by remember { mutableStateOf<Int?>(null) }
@@ -1170,6 +1180,9 @@ private fun WeenoWizard(vm: AppViewModel) {
         labelMemoryHitId = null
         showLabelMemoryConfirm = false
         labelMemoryConfirmMatch = null
+        scanAttempt = 0
+        isScanRetryReopen = false
+        scanNetworkRetryFile = null
         location = ""
         rating = 3f
         rebuy = null
@@ -1232,8 +1245,12 @@ private fun WeenoWizard(vm: AppViewModel) {
 
     // Partagé entre : photo caméra système (mode scan), LabelAutoScanner (capture auto OCR)
     // et le bouton "Lancer le scan". skipMemory=true après un refus explicite d'un match mémoire.
-    fun runLabelAnalysis(f: File, skipMemory: Boolean = false) {
+    fun runLabelAnalysis(f: File, skipMemory: Boolean = false, isRetry: Boolean = false) {
         labelPhotoFile = f
+        if (!isRetry) {
+            scanAttempt = 0
+            scanNetworkRetryFile = null
+        }
         if (!skipMemory) {
             labelMemoryPrint = null
             labelMemoryHitId = null
@@ -1278,22 +1295,52 @@ private fun WeenoWizard(vm: AppViewModel) {
                         }
                     } else {
                         // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
-                        // Vivino, on ne bloque pas sur un écran d'échec : on relance juste le scan live.
-                        scanStatus = scan.hint ?: "Rien reconnu — continue de scanner"
-                        delay(400)
-                        showLabelAutoScanner = true
+                        // Vivino, on ne bloque pas sur un écran d'échec : on relance le scan live,
+                        // plafonné comme la webapp (LIVE_SCAN_MAX_ATTEMPTS) pour rester sous le
+                        // rate-limit serveur partagé WINE_VIVINO_SCAN_RATE_MAX au lieu de boucler à l'infini.
+                        scanAttempt += 1
+                        if (scanAttempt < maxScanAttempts) {
+                            scanStatus = "${scan.hint ?: "Rien reconnu"} — nouvelle tentative ($scanAttempt/$maxScanAttempts)…"
+                            isScanRetryReopen = true
+                            delay(400)
+                            showLabelAutoScanner = true
+                        } else {
+                            showManual = true
+                            scanStatus = "Étiquette non reconnue après $maxScanAttempts tentatives — cherche sur Vivino ou saisis à la main"
+                            vm.showToast("Scan sans résultat", ToastPayload.Variant.WARN)
+                        }
                     }
                 }
             } catch (e: Exception) {
-                val m = e.message ?: "Erreur scan"
-                scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
-                    "Erreur lecture réponse scan — mets à jour l’app"
+                if (!vm.isEffectivelyOnline()) {
+                    // Hors ligne : la photo est gardée et le scan est relancé auto au retour
+                    // réseau (parité webapp scheduleScanOnlineRetry) — pas de retry caméra ici,
+                    // le problème est le réseau, pas la reconnaissance.
+                    scanNetworkRetryFile = f
+                    showManual = true
+                    scanStatus = "Hors ligne — relance auto du scan au retour du réseau"
                 } else {
-                    m
+                    val m = e.message ?: "Erreur scan"
+                    scanStatus = if (m.contains("JsonNull", ignoreCase = true)) {
+                        "Erreur lecture réponse scan — mets à jour l’app"
+                    } else {
+                        m
+                    }
                 }
             } finally {
                 busy = false
             }
+        }
+    }
+
+    // Relance auto du scan au retour réseau (parité webapp scheduleScanOnlineRetry) —
+    // même photo, sans repasser par la caméra.
+    LaunchedEffect(vm.networkStatus) {
+        val f = scanNetworkRetryFile
+        if (vm.networkStatus == NetworkStatus.ONLINE && f != null) {
+            scanNetworkRetryFile = null
+            vm.showToast("Réseau de retour — relance du scan…", ToastPayload.Variant.SUCCESS)
+            runLabelAnalysis(f, isRetry = true)
         }
     }
 
@@ -1462,7 +1509,11 @@ private fun WeenoWizard(vm: AppViewModel) {
                             .clip(RoundedCornerShape(16.dp))
                             .background(WineColors.photoBg)
                             .border(1.dp, WineColors.border, RoundedCornerShape(16.dp))
-                            .clickable { showLabelAutoScanner = true },
+                            .clickable {
+                                scanAttempt = 0
+                                isScanRetryReopen = false
+                                showLabelAutoScanner = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (labelPhotoFile != null) {
@@ -1510,9 +1561,14 @@ private fun WeenoWizard(vm: AppViewModel) {
                                 val dir = File(context.cacheDir, "wine").apply { mkdirs() }
                                 val f = File(dir, "scan_auto_${System.currentTimeMillis()}.jpg")
                                 f.writeBytes(bytes)
-                                runLabelAnalysis(f)
+                                val retry = isScanRetryReopen
+                                isScanRetryReopen = false
+                                runLabelAnalysis(f, isRetry = retry)
                             },
-                            onCancel = { showLabelAutoScanner = false }
+                            onCancel = {
+                                showLabelAutoScanner = false
+                                isScanRetryReopen = false
+                            }
                         )
                     }
                 }

@@ -52,6 +52,18 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
     /// plus grande que le reste ; une page de texte uniforme n'en a aucune. Relevé un
     /// peu pour exiger que l'étiquette remplisse vraiment le cadre.
     private let minHeadlineHeight: CGFloat = 0.06
+    /// Mots-clés très caractéristiques d'un produit qui N'EST PAS du vin (compléments
+    /// alimentaires, cosmétiques, nourriture emballée) — un pot de créatine a le même
+    /// profil "headline + texte structuré" qu'une étiquette de vin pour les heuristiques
+    /// ci-dessus, donc la forme seule ne suffit pas à les distinguer. La mention légale
+    /// obligatoire (tableau nutritionnel, "complément alimentaire"…) si.
+    private let nonWineKeywords = [
+        "COMPLEMENT ALIMENTAIRE", "COMPLÉMENT ALIMENTAIRE", "DIETARY SUPPLEMENT",
+        "SUPPLEMENT FACTS", "CREATINE", "CRÉATINE", "MONOHYDRATE", "WHEY",
+        "VALEUR ENERGETIQUE", "VALEUR ÉNERGÉTIQUE", "NUTRITION FACTS",
+        "APPORT JOURNALIER", "PROTEIN POWDER", "SHAMPOOING", "GEL DOUCHE",
+        "CREME HYDRATANTE", "CRÈME HYDRATANTE", "DENTIFRICE",
+    ]
     private var analyzing = false
 
     override func viewDidLoad() {
@@ -218,12 +230,20 @@ final class LiveLabelScannerVC: UIViewController, AVCaptureVideoDataOutputSample
             let text = lines.joined(separator: "\n")
             let charCount = text.filter { !$0.isWhitespace }.count
             let hasHeadline = (observations.map { $0.boundingBox.height }.max() ?? 0) >= self.minHeadlineHeight
-            let good = charCount >= self.minChars && charCount <= self.maxChars
+            // Rejet dur si le texte contient un marqueur typique d'un produit non-vin —
+            // pas de soft reset ici, on ne veut clairement pas déclencher dessus.
+            let upperText = text.uppercased()
+            let looksNonWine = self.nonWineKeywords.contains { upperText.contains($0) }
+            let good = !looksNonWine && charCount >= self.minChars && charCount <= self.maxChars
                 && lines.count >= self.minLines && lines.count <= self.maxLines
                 && hasHeadline
 
             DispatchQueue.main.async {
-                if good {
+                if looksNonWine {
+                    self.stableCount = 0
+                    self.setStatus("Ça ne ressemble pas à une étiquette de vin")
+                    self.guideView.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+                } else if good {
                     self.stableCount = min(self.stableCount + 1, self.minStableFrames)
                     if self.stableCount >= self.minStableFrames {
                         self.setStatus("Étiquette détectée — capture…")
