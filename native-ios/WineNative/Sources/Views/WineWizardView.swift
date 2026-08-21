@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -45,6 +46,10 @@ struct WineWizardView: View {
     // Photo en attente d'un scan réseau qui a échoué hors-ligne — relancée auto au retour du réseau
     // (parité webapp scheduleScanOnlineRetry), voir .onChange(of: app.networkStatus) plus bas.
     @State private var scanNetworkRetryImage: UIImage?
+    // Source de la dernière photo scannée — une photo importée est statique (relancer la
+    // caméra live sur non-match n'a aucun sens, contrairement à un recadrage en direct).
+    @State private var scanSourceIsGallery = false
+    @State private var galleryPickerItem: PhotosPickerItem?
     @State private var showTastingCamera = false
     @State private var photoData: Data?
     @State private var photoPreview: UIImage?
@@ -127,6 +132,7 @@ struct WineWizardView: View {
                     showScanCamera = false
                     let retry = isScanRetryReopen
                     isScanRetryReopen = false
+                    scanSourceIsGallery = false
                     Task { await processScanPhoto(image, isRetry: retry) }
                 },
                 onCancel: {
@@ -267,6 +273,29 @@ struct WineWizardView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                PhotosPicker(selection: $galleryPickerItem, matching: .images) {
+                    Label("Importer depuis la photothèque", systemImage: "photo.on.rectangle")
+                        .font(.system(size: Theme.Font.lead * 0.94, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(busy)
+                .onChange(of: galleryPickerItem) { newItem in
+                    guard let newItem else { return }
+                    Task {
+                        defer { galleryPickerItem = nil }
+                        guard let data = try? await newItem.loadTransferable(type: Data.self),
+                              let image = UIImage(data: data)
+                        else {
+                            app.showToast("Photo illisible", variant: .warn)
+                            return
+                        }
+                        scanAttempt = 0
+                        isScanRetryReopen = false
+                        scanSourceIsGallery = true
+                        await processScanPhoto(image)
+                    }
+                }
                 Text(scanStatus)
                     .font(.system(size: Theme.Font.lead * 0.94))
                     .foregroundStyle(Theme.muted)
@@ -684,6 +713,12 @@ struct WineWizardView: View {
                         scanStatus = scan.hint ?? "Échec scan : \((scan.aiError ?? "").prefix(140))"
                     }
                     showManual = true
+                } else if scanSourceIsGallery {
+                    // Photo importée = statique, pas de cadrage à corriger — relancer la
+                    // caméra live n'a aucun sens ici, contrairement au flux caméra.
+                    showManual = true
+                    scanStatus = "Étiquette non reconnue sur cette photo — choisis-en une autre, cherche sur Vivino ou saisis à la main"
+                    app.showToast("Scan sans résultat", variant: .warn)
                 } else {
                     // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
                     // Vivino, on ne bloque pas sur un écran d'échec : on relance le scan live,

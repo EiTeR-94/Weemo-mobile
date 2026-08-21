@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -1114,6 +1115,9 @@ private fun WeenoWizard(vm: AppViewModel) {
     // Photo en attente d'un scan réseau qui a échoué hors-ligne — relancée auto au retour du réseau
     // (parité webapp scheduleScanOnlineRetry), voir LaunchedEffect(vm.networkStatus) plus bas.
     var scanNetworkRetryFile by remember { mutableStateOf<File?>(null) }
+    // Source de la dernière photo scannée — une photo importée est statique (relancer la
+    // caméra live sur non-match n'a aucun sens, contrairement à un recadrage en direct).
+    var scanSourceIsGallery by remember { mutableStateOf(false) }
     // Mémoire étiquette (dHash/aHash → vin déjà connu, court-circuite Vivino/IA au rescan).
     var labelMemoryPrint by remember { mutableStateOf<Pair<String, String>?>(null) }
     var labelMemoryHitId by remember { mutableStateOf<Int?>(null) }
@@ -1293,6 +1297,12 @@ private fun WeenoWizard(vm: AppViewModel) {
                             !scan.aiError.isNullOrBlank() -> scan.aiError!!
                             else -> "Scan temporairement saturé — réessaie ou saisie manuelle"
                         }
+                    } else if (scanSourceIsGallery) {
+                        // Photo importée = statique, pas de cadrage à corriger — relancer la
+                        // caméra live n'a aucun sens ici, contrairement au flux caméra.
+                        showManual = true
+                        scanStatus = "Étiquette non reconnue sur cette photo — choisis-en une autre, cherche sur Vivino ou saisis à la main"
+                        vm.showToast("Scan sans résultat", ToastPayload.Variant.WARN)
                     } else {
                         // Rien reconnu (étiquette illisible ou pas une étiquette du tout) — comme
                         // Vivino, on ne bloque pas sur un écran d'échec : on relance le scan live,
@@ -1354,6 +1364,31 @@ private fun WeenoWizard(vm: AppViewModel) {
             return@rememberLauncherForActivityResult
         }
         // Mode scan = POST /api/label-scan (backend serveur Vivino-vision ou Gemini + candidats Vivino)
+        scanSourceIsGallery = false
+        runLabelAnalysis(f)
+    }
+
+    // Import depuis la photothèque — Photo Picker système (androidx.activity 1.6+), pas de
+    // permission READ_MEDIA_IMAGES nécessaire, même pipeline que le scan caméra.
+    val pickLabelImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val dir = File(context.cacheDir, "wine").apply { mkdirs() }
+        val f = File(dir, "scan_gallery_${System.currentTimeMillis()}.jpg")
+        val ok = try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                f.outputStream().use { output -> input.copyTo(output) }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+        if (!ok || f.length() == 0L) {
+            vm.showToast("Photo illisible", ToastPayload.Variant.WARN)
+            return@rememberLauncherForActivityResult
+        }
+        scanAttempt = 0
+        isScanRetryReopen = false
+        scanSourceIsGallery = true
         runLabelAnalysis(f)
     }
 
@@ -1540,6 +1575,22 @@ private fun WeenoWizard(vm: AppViewModel) {
                         }
                     }
                     Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Importer depuis la photothèque",
+                        color = WineColors.accent,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !busy) {
+                                pickLabelImage.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .padding(vertical = 4.dp)
+                    )
+                    Spacer(Modifier.height(6.dp))
                     Text(scanStatus, color = WineColors.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
                     if (labelPhotoFile != null && !busy) {
                         Spacer(Modifier.height(8.dp))
@@ -1563,6 +1614,7 @@ private fun WeenoWizard(vm: AppViewModel) {
                                 f.writeBytes(bytes)
                                 val retry = isScanRetryReopen
                                 isScanRetryReopen = false
+                                scanSourceIsGallery = false
                                 runLabelAnalysis(f, isRetry = retry)
                             },
                             onCancel = {
