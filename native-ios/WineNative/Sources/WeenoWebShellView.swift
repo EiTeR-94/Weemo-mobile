@@ -6,8 +6,8 @@ import WebKit
 struct WeenoWebShellView: UIViewRepresentable {
     @Binding var pendingURL: URL?
 
-    static let startURL = URL(string: "https://eiter.freeboxos.fr/wine/app")!
-    static let lanURL = URL(string: "https://192.168.1.50:8444/wine/app")!
+    static let startURL = URL(string: "https://weeno.eiterlab.com/app")!
+    static let lanURL = startURL
     static let bg = UIColor(red: 0x12 / 255, green: 0x0a / 255, blue: 0x0e / 255, alpha: 1)
 
     func makeCoordinator() -> Coordinator {
@@ -51,7 +51,7 @@ struct WeenoWebShellView: UIViewRepresentable {
 
     private func isWeenoURL(_ url: URL) -> Bool {
         let s = url.absoluteString
-        return s.contains("eiter.freeboxos.fr") || s.contains("192.168.1.") || s.contains("/wine")
+        return s.contains("weeno.eiterlab.com") || s.contains("eiter.freeboxos.fr") || s.contains("192.168.1.") || s.contains("/wine")
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -74,7 +74,7 @@ struct WeenoWebShellView: UIViewRepresentable {
             }
             let s = url.absoluteString
             // Weeno / LAN / freebox → stay in WebView
-            if s.contains("eiter.freeboxos.fr") || s.contains("192.168.1.") || s.hasPrefix("about:") {
+            if s.contains("weeno.eiterlab.com") || s.contains("eiter.freeboxos.fr") || s.contains("192.168.1.") || s.hasPrefix("about:") {
                 decisionHandler(.allow)
                 return
             }
@@ -122,12 +122,13 @@ struct WeenoWebRootView: View {
         }
         .preferredColorScheme(.dark)
         .onOpenURL { url in
-            if url.absoluteString.contains("/wine") {
+            if url.host == "weeno.eiterlab.com" || url.absoluteString.contains("/wine") {
                 pendingURL = url
             }
         }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-            if let url = activity.webpageURL, url.absoluteString.contains("/wine") {
+            if let url = activity.webpageURL,
+               url.host == "weeno.eiterlab.com" || url.absoluteString.contains("/wine") {
                 pendingURL = url
             }
         }

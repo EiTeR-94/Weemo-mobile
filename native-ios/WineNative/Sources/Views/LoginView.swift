@@ -142,7 +142,7 @@ struct LoginView: View {
                                 WeenoField(
                                     label: "Lien d'invitation",
                                     text: $inviteLink,
-                                    placeholder: "https://eiter.freeboxos.fr/wine…/join/…"
+                                    placeholder: "https://weeno.eiterlab.com/join/…"
                                 )
                                 .padding(.top, 10)
                             }

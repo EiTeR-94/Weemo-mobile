@@ -2,15 +2,16 @@ import Foundation
 
 /// Miroir exact d'Android `ServerSettings.kt`
 enum ServerSettings {
-    static let canonicalHost = "eiter.freeboxos.fr"
+    static let canonicalHost = "weeno.eiterlab.com"
     static let wanIPv4 = "82.64.151.113"
-    static let apiBaseString = "https://\(canonicalHost)/wine/"
+    static let apiBaseString = "https://\(canonicalHost)/"
     /// Portail DL IPA/APK + versions.json
     static let portalURLString = "https://\(canonicalHost)/mobile/wine/"
     static let versionsURLString = "https://\(canonicalHost)/mobile/wine/versions.json"
     /// Fallback 4G si AAAA Freebox casse le TLS (IPv4 + SNI host).
-    static let wanIPv4ApiBaseString = "https://\(wanIPv4)/wine/"
-    static let lanApiBaseString = "https://192.168.1.50:8444/wine/"
+    static let wanIPv4ApiBaseString = "https://\(wanIPv4)/"
+    /// Plus de port LAN dédié : weeno.eiterlab.com gère déjà le LAN via allow-list nginx (IPv4 hairpin + IPv6).
+    static let lanApiBaseString = apiBaseString
     /// Weeno Quest alpha (clone isolé) — invites IPA/APK
     static let alphaApiBaseString = "https://\(canonicalHost)/wine/"
     static let alphaWanIPv4ApiBaseString = "https://\(wanIPv4)/wine/"
