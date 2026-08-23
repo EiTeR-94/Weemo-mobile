@@ -10,6 +10,7 @@ enum ServerSettings {
     static let versionsURLString = "https://\(canonicalHost)/mobile/wine/versions.json"
     /// Fallback 4G si AAAA Freebox casse le TLS (IPv4 + SNI host).
     static let wanIPv4ApiBaseString = "https://\(wanIPv4)/"
+    static let legacyApiBaseString = "https://eiter.freeboxos.fr/wine/"
     /// Plus de port LAN dédié : weeno.eiterlab.com gère déjà le LAN via allow-list nginx (IPv4 hairpin + IPv6).
     static let lanApiBaseString = apiBaseString
     /// Weeno Quest alpha (clone isolé) — invites IPA/APK
@@ -71,7 +72,7 @@ enum ServerSettings {
         if prefix.contains("/wine") {
             return [alphaApiBaseString, alphaWanIPv4ApiBaseString]
         }
-        return [apiBaseString, wanIPv4ApiBaseString]
+        return [apiBaseString, wanIPv4ApiBaseString, legacyApiBaseString]
     }
 
     static func isLanEndpoint(_ url: String) -> Bool {

@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 45
 
     env:
-      WINE_SERVER_URL: https://eiter.freeboxos.fr/wine
+      WINE_SERVER_URL: https://weeno.eiterlab.com
       CI: "true"
 
     steps:
