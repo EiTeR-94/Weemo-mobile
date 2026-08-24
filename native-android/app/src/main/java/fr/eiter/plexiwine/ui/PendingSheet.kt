@@ -68,27 +68,56 @@ import kotlin.coroutines.resume
 
 
 @Composable
-fun WineApp(vm: AppViewModel) {
-    val context = LocalContext.current
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(WineColors.bg)
-    ) {
-        when {
-            vm.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = WineColors.accent)
+fun PendingSheet(vm: AppViewModel) {
+    SheetScaffold("En attente", onClose = { vm.closeSheet() }) {
+        Text(
+            when (vm.networkStatus) {
+                NetworkStatus.ONLINE -> "Réseau OK — tu peux synchroniser."
+                NetworkStatus.OFFLINE -> "Pas de réseau — les notes restent sur l'appareil."
+                NetworkStatus.SERVER_UNREACHABLE -> "Serveur injoignable — file conservée."
+            },
+            color = WineColors.muted,
+            fontSize = 12.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        WeenoPrimaryButton(
+            "Synchroniser maintenant",
+            enabled = vm.networkStatus == NetworkStatus.ONLINE && vm.pendingCount > 0
+        ) {
+            vm.requestSync()
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Créations en attente (${vm.pendingItems.size})", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+        if (vm.pendingItems.isEmpty()) {
+            Text("Aucune dégustation en attente.", color = WineColors.muted)
+        } else {
+            vm.pendingItems.forEach { p ->
+                WeenoCard {
+                    Text(p.wineName, color = WineColors.text, fontWeight = FontWeight.Bold)
+                    Text("${p.producer} · ${p.style} · ★${formatRating(p.rating)}", color = WineColors.muted, fontSize = 12.sp)
+                    p.location?.takeIf { it.isNotBlank() }?.let {
+                        Text("📍 $it", color = WineColors.muted, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = { vm.removePending(p.id) }) {
+                        Text("Supprimer", color = WineColors.error)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Suppressions en attente", color = WineColors.text, fontWeight = FontWeight.SemiBold)
+        if (vm.pendingDeletes.isEmpty()) {
+            Text("Aucune suppression en attente.", color = WineColors.muted)
+        } else {
+            vm.pendingDeletes.forEach { id ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Suppression #$id", color = WineColors.text, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vm.removePendingDelete(id) }) {
+                        Text("Annuler", color = WineColors.error)
+                    }
                 }
             }
-            !vm.isLoggedIn -> LoginScreen(vm)
-            else -> MainScreen(vm)
-        }
-        // Bannière haut d'écran = iOS (tap ou × pour fermer)
-        ToastOverlay(toast = vm.toast, onDismiss = { vm.hideToast() })
-        // Weeno intro + célébrations (au-dessus du toast)
-        if (vm.isLoggedIn) {
-            RpgCelebrationOverlay(vm)
         }
     }
 }

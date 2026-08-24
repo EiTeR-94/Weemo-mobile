@@ -66,29 +66,24 @@ import java.util.Locale
 import kotlin.coroutines.resume
 
 
+// ───────────────────────── Sheets ─────────────────────────
 
 @Composable
-fun WineApp(vm: AppViewModel) {
-    val context = LocalContext.current
-    Box(
+fun SheetScaffold(title: String, onClose: () -> Unit, trailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    // fillMaxSize + consumeClicks : bloque les taps vers le HUD Grimoire en dessous
+    Column(
         Modifier
             .fillMaxSize()
             .background(WineColors.bg)
+            .consumeClicks()
+            .padding(12.dp)
     ) {
-        when {
-            vm.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = WineColors.accent)
-                }
-            }
-            !vm.isLoggedIn -> LoginScreen(vm)
-            else -> MainScreen(vm)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = WineColors.text, modifier = Modifier.weight(1f))
+            trailing?.invoke()
+            TextButton(onClick = onClose) { Text("Fermer ✕", color = WineColors.muted) }
         }
-        // Bannière haut d'écran = iOS (tap ou × pour fermer)
-        ToastOverlay(toast = vm.toast, onDismiss = { vm.hideToast() })
-        // Weeno intro + célébrations (au-dessus du toast)
-        if (vm.isLoggedIn) {
-            RpgCelebrationOverlay(vm)
-        }
+        Spacer(Modifier.height(8.dp))
+        content()
     }
 }

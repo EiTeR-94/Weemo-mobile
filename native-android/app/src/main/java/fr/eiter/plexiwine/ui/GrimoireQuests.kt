@@ -1,0 +1,259 @@
+package fr.eiter.plexiwine.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import fr.eiter.plexiwine.AdminFeedbackItem
+import fr.eiter.plexiwine.AdminFeedbackStats
+import fr.eiter.plexiwine.AppViewModel
+import fr.eiter.plexiwine.RpgAdminFlags
+import fr.eiter.plexiwine.RpgAdminPlayer
+import fr.eiter.plexiwine.RpgAdminPlayersResponse
+import fr.eiter.plexiwine.RpgBadge
+import fr.eiter.plexiwine.RpgCelebration
+import fr.eiter.plexiwine.RpgClassInfo
+import fr.eiter.plexiwine.RpgLoot
+import fr.eiter.plexiwine.RpgProfile
+import fr.eiter.plexiwine.RpgQuest
+import fr.eiter.plexiwine.RpgState
+import fr.eiter.plexiwine.ToastPayload
+import fr.eiter.plexiwine.displayIcon
+import fr.eiter.plexiwine.rarityLabelFr
+import fr.eiter.plexiwine.ui.theme.WineColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+
+@Composable
+fun ColumnScope.GrimoireQuests(state: RpgState) {
+    val scroll = rememberScrollState()
+    val q = state.quests
+    val active = q?.active.orEmpty()
+    val doneToday = q?.doneToday.orEmpty()
+    val doneWeekly = q?.doneWeekly.orEmpty()
+    val dailies = active.filter { it.kind == "daily" } + doneToday
+    val weeklies = active.filter { it.kind == "weekly" } + doneWeekly
+    val story = active.filter { it.kind == "story" }
+    val nOpen = active.count { it.status != "done" }
+    val nDone = doneToday.size + doneWeekly.size
+    val nTotal = active.size + doneToday.size + doneWeekly.size
+
+    Column(Modifier.verticalScroll(scroll)) {
+        TabHero(
+            kicker = "Tableau des quêtes",
+            title = "📜 Missions de la taverne",
+            blurb = "Accomplis des objectifs pour gagner de l’XP. Les journalières se renouvellent chaque jour."
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTileSoft("⚔️", "$nOpen", "Actives", Modifier.weight(1f))
+                StatTileSoft("✅", "$nDone", "Finies", Modifier.weight(1f))
+                StatTileSoft("✨", "$nTotal", "Total", Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        SectionCard(
+            title = "Journalières",
+            ico = "☀️",
+            count = dailies.size.takeIf { it > 0 }
+        ) {
+            if (dailies.isEmpty()) {
+                Text("Pas de quête du jour — reviens demain.", color = WineColors.muted, fontSize = 12.sp)
+            } else {
+                dailies.forEach { QuestCard(it) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        SectionCard(
+            title = "Hebdomadaires",
+            ico = "📅",
+            count = weeklies.size.takeIf { it > 0 }
+        ) {
+            if (weeklies.isEmpty()) {
+                Text("Aucune quête hebdo pour l’instant.", color = WineColors.muted, fontSize = 12.sp)
+            } else {
+                weeklies.forEach { QuestCard(it) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        SectionCard(
+            title = "Histoire",
+            ico = "📖",
+            count = story.size.takeIf { it > 0 }
+        ) {
+            if (story.isEmpty()) {
+                Text("Chapitres à venir… le tavernier écrit encore.", color = WineColors.muted, fontSize = 12.sp)
+            } else {
+                story.forEach { QuestCard(it) }
+            }
+        }
+        Spacer(Modifier.height(28.dp))
+    }
+}
+
+@Composable
+fun QuestCard(q: RpgQuest) {
+    // Parité iOS QuestCardView
+    val done = q.status == "done"
+    val tgt = q.target.coerceAtLeast(1)
+    val prog = q.progress
+    val pct = (prog.toFloat() / tgt).coerceIn(0f, 1f)
+    val (kindLabel, kindIco, kindColor) = when ((q.kind ?: "").lowercase()) {
+        "daily" -> Triple("Journalière", "☀️", QuestBlue)
+        "weekly" -> Triple("Hebdo", "📅", BadgePurple)
+        "story" -> Triple("Histoire", "📖", Color(0xFFF97316))
+        else -> Triple("Quête", "📜", QuestBlue)
+    }
+    val border = if (done) ExploreGreen else kindColor
+    val statusLabel = when {
+        done -> "Terminée"
+        pct > 0f -> "En cours"
+        else -> "À faire"
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, border.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(border.copy(alpha = 0.08f), WineColors.card)
+                    )
+                )
+                .padding(12.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "$kindIco $kindLabel",
+                        color = kindColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(kindColor.copy(alpha = 0.12f))
+                            .border(1.dp, kindColor.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        q.title ?: "—",
+                        color = WineColors.text,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+                Text(
+                    "✨ +${q.rewardXp} XP",
+                    color = Gold,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+            q.description?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(it, color = WineColors.muted, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    statusLabel,
+                    color = if (done) ExploreGreen else kindColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "$prog/$tgt · ${(pct * 100).toInt()}%",
+                    color = WineColors.muted,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { pct },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+                color = if (done) ExploreGreen else kindColor,
+                trackColor = WineColors.fieldBg
+            )
+        }
+        // Bandeau gauche (parité iOS)
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .padding(vertical = 4.dp)
+                .width(3.dp)
+                .height(48.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(border)
+        )
+    }
+}
