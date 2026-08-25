@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import fr.eiter.plexiwine.WineAPI
+import fr.eiter.plexiwine.downloadAsset
 import fr.eiter.plexiwine.WineProduct
 import fr.eiter.plexiwine.StyleOption
 import fr.eiter.plexiwine.ImageCache

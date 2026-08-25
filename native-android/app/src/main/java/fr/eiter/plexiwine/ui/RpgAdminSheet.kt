@@ -66,6 +66,17 @@ import androidx.compose.ui.text.withStyle
 import fr.eiter.plexiwine.AdminFeedbackItem
 import fr.eiter.plexiwine.AdminFeedbackStats
 import fr.eiter.plexiwine.AppViewModel
+import fr.eiter.plexiwine.adminFeedbackDelete
+import fr.eiter.plexiwine.adminFeedbackList
+import fr.eiter.plexiwine.adminFeedbackMarkRead
+import fr.eiter.plexiwine.adminFeedbackReopen
+import fr.eiter.plexiwine.adminFeedbackResolve
+import fr.eiter.plexiwine.adminRpgAdjustXp
+import fr.eiter.plexiwine.adminRpgPatchPlayer
+import fr.eiter.plexiwine.adminRpgPatchSettings
+import fr.eiter.plexiwine.adminRpgPlayersBundle
+import fr.eiter.plexiwine.adminRpgResetDaily
+import fr.eiter.plexiwine.adminRpgSetUserAllowed
 import fr.eiter.plexiwine.RpgAdminFlags
 import fr.eiter.plexiwine.RpgAdminPlayer
 import fr.eiter.plexiwine.RpgAdminPlayersResponse
