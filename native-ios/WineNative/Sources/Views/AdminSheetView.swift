@@ -17,10 +17,6 @@ struct AdminSheetView: View {
     @State private var newAdmin = false
     @State private var userPasswords: [String: String] = [:]
 
-    @State private var inviteLabel = ""
-    @State private var inviteEmail = ""
-    @State private var inviteValidity = "7d"
-    @State private var inviteCreating = false
     @State private var createdInviteURL: String?
     @State private var message: String?
     @State private var errorMessage: String?
@@ -49,11 +45,6 @@ struct AdminSheetView: View {
             }
         }
     }
-
-    private let validityOptions: [(String, String)] = [
-        ("24h", "24 heures"), ("48h", "48 heures"), ("7d", "7 jours"),
-        ("14d", "14 jours"), ("30d", "30 jours"), ("90d", "90 jours"), ("permanent", "Permanent"),
-    ]
 
     var body: some View {
         WeenoOverlayScreen(
@@ -192,34 +183,10 @@ struct AdminSheetView: View {
             WeenoGhostButton("IP", action: openAllIPs)
         }
 
-        Text("Lien + email (l'invité saisit l'email qu'il t'a donné). Lien 24 h si non utilisé. 1 appareil. « Renvoyer l'accès » = 10 min.")
+        Text("« Renvoyer l'accès » = 10 min.")
             .font(.system(size: 13))
             .foregroundStyle(Theme.muted)
 
-        WeenoAdminCard {
-            VStack(spacing: 0) {
-                WeenoField(label: "Nom de l'invité", text: $inviteLabel, placeholder: "ex. Paul")
-                WeenoField(label: "Email de l'invité", text: $inviteEmail, placeholder: "ex. paul@example.com")
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-                    .autocorrectionDisabled()
-                    .padding(.top, 10)
-                WeenoSelectField(
-                    label: "Validité du compte",
-                    value: inviteValidity,
-                    options: validityOptions,
-                    onSelect: { inviteValidity = $0 }
-                )
-                .padding(.top, 10)
-                WeenoPrimaryButton(
-                    title: inviteCreating ? "Génération…" : "Créer le lien",
-                    disabled: inviteLabel.count < 2 || inviteEmail.isEmpty || !inviteEmail.contains("@") || inviteCreating,
-                    busy: inviteCreating
-                ) {
-                    Task { await createInvite() }
-                }
-            }
-        }
         if let url = createdInviteURL {
             InviteLinkResultCard(
                 url: url,
@@ -686,48 +653,6 @@ struct AdminSheetView: View {
             message = "Mot de passe mis à jour"
             errorMessage = nil
         } catch let err { errorMessage = err.localizedDescription }
-    }
-
-    private func createInvite() async {
-        guard !inviteCreating else { return }
-        let label = inviteLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let email = inviteEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard label.count >= 2 else {
-            app.showToast("Nom trop court (2 car. min.)", variant: .warn)
-            return
-        }
-        guard email.contains("@") else {
-            app.showToast("Email invité requis", variant: .warn)
-            return
-        }
-        inviteCreating = true
-        app.showToast(
-            "Lien en cours de génération…",
-            variant: .info,
-            label: "Invitation",
-            durationMs: 120_000
-        )
-        defer { inviteCreating = false }
-        do {
-            let res = try await app.api.adminCreateInvite(label: label, email: email, validity: inviteValidity)
-            app.hideToast()
-            createdInviteURL = res.url
-            inviteLabel = ""
-            inviteEmail = ""
-            message = nil
-            errorMessage = nil
-            await reload()
-            app.showToast(
-                "Lien créé — copie-le maintenant",
-                variant: .success,
-                label: "Invitation",
-                durationMs: 4200
-            )
-        } catch let err {
-            app.hideToast()
-            errorMessage = err.localizedDescription
-            app.showToast(err.localizedDescription, variant: .error, durationMs: 4200)
-        }
     }
 
     private func extend(_ inv: InviteItem, _ validity: String) async {
