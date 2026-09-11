@@ -51,9 +51,6 @@ fun AdminSheet(vm: AppViewModel) {
     var newPass by remember { mutableStateOf("") }
     var newAdmin by remember { mutableStateOf(false) }
 
-    // invite
-    var createdUrl by remember { mutableStateOf<String?>(null) }
-
     // referentials
     var refTab by remember { mutableIntStateOf(0) }
     var refFilter by remember { mutableStateOf("") }
@@ -262,16 +259,6 @@ fun AdminSheet(vm: AppViewModel) {
                     // ── Invités ── (création faite depuis le hub admin, gestion locale conservée)
                     Text("Invitations", color = WineColors.muted, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(6.dp))
-                    createdUrl?.let { url ->
-                        Spacer(Modifier.height(8.dp))
-                        Text(url, color = WineColors.text, fontSize = 11.sp)
-                        WeenoSecondaryButton("Copier le lien") {
-                            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("invite", url))
-                            createdUrl = null
-                            toastOk("Lien copié")
-                        }
-                    }
                     Spacer(Modifier.height(12.dp))
                     invites.forEach { inv ->
                         InviteCard(
@@ -286,29 +273,6 @@ fun AdminSheet(vm: AppViewModel) {
                                     try {
                                         withContext(Dispatchers.IO) { vm.api.adminExtendInvite(inv.id, v) }
                                         toastOk("Prolongé")
-                                        reload++
-                                    } catch (e: Exception) {
-                                        toastErr(e.message ?: "Erreur")
-                                    }
-                                }
-                            },
-                            onReissue = {
-                                scope.launch {
-                                    try {
-                                        val url = withContext(Dispatchers.IO) { vm.api.adminReissueInvite(inv.id) }
-                                        createdUrl = url
-                                        toastOk("Lien réactivation prêt")
-                                        reload++
-                                    } catch (e: Exception) {
-                                        toastErr(e.message ?: "Erreur")
-                                    }
-                                }
-                            },
-                            onRevoke = {
-                                scope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) { vm.api.adminRevokeInvite(inv.id) }
-                                        toastOk("Révoquée")
                                         reload++
                                     } catch (e: Exception) {
                                         toastErr(e.message ?: "Erreur")
@@ -692,8 +656,6 @@ private fun InviteCard(
     inv: InviteItem,
     onCopy: (String) -> Unit,
     onExtend: (String) -> Unit,
-    onReissue: () -> Unit,
-    onRevoke: () -> Unit,
 ) {
     Column(
         Modifier
@@ -785,12 +747,6 @@ private fun InviteCard(
                 SmallAction("+7j") { onExtend("7d") }
                 SmallAction("+30j") { onExtend("30d") }
                 SmallAction("Perm.") { onExtend("permanent") }
-            }
-            if (inv.canReissue == true || inv.reactivationPending == true) {
-                SmallAction("Renvoyer l'accès") { onReissue() }
-            }
-            if (inv.revokedAt == null) {
-                SmallAction("Révoquer", danger = true) { onRevoke() }
             }
         }
     }
