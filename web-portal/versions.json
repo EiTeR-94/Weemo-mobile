@@ -1,15 +1,15 @@
 {
-  "ios": "0.6.6",
-  "ios_build": "64",
-  "ios_updated_at": "28-08-2026 18:27",
+  "ios": "0.6.7",
+  "ios_build": "65",
+  "ios_updated_at": "11-09-2026 10:51",
   "android": "0.6.6",
   "android_build": "47",
   "android_updated_at": "11-09-2026 10:43",
-  "webapp": "0.4.17",
-  "webapp_updated_at": "11-09-2026 10:40",
-  "manifest_generated_at": "11-09-2026 10:43",
-  "updated_at": "11-09-2026 10:43",
-  "updated_at_iso": "2026-09-11T08:43:36Z",
+  "webapp": "0.4.21",
+  "webapp_updated_at": "11-09-2026 11:53",
+  "manifest_generated_at": "13-09-2026 17:53",
+  "updated_at": "13-09-2026 17:53",
+  "updated_at_iso": "2026-09-13T15:53:14Z",
   "portal_url": "https://weeno.eiterlab.com/mobile/wine/",
   "note": "L’IPA et l’APK ont des cycles de maj séparés. Compare la version de ta plateforme."
 }
